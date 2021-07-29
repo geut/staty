@@ -1,0 +1,51 @@
+{
+  "name": "@geut/staty",
+  "version": "0.0.1",
+  "description": "Template to create modules following the Geut path",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "start": "node index.js",
+    "test": "uvu",
+    "posttest": "npm run lint",
+    "lint": "standard",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": {
+    "dlv": "^1.1.3",
+    "klona": "^2.0.4"
+  },
+  "devDependencies": {
+    "standard": "^16.0.3",
+    "uvu": "^0.5.1"
+  },
+  "standard": {
+    "env": [
+      "node",
+      "browser"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geut/staty.git"
+  },
+  "keywords": [
+    "create",
+    "geut",
+    "module"
+  ],
+  "author": {
+    "name": "GEUT",
+    "email": "contact@geutstudio.com"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/geut/staty/issues"
+  },
+  "homepage": "https://github.com/geut/staty#readme"
+}
