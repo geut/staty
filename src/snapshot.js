@@ -2,12 +2,12 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
   return function snapshot (x) {
     x = x ? (x[kTarget] || x) : x
 
-    let mapProps
+    let refSnapshot
 
     if (typeof x !== 'object') return x
 
     if (x[kIsRef]) {
-      mapProps = x.mapProps
+      refSnapshot = x.snapshot
       x = x.__ref
     }
 
@@ -15,20 +15,18 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
     let tmp
     const str = Object.prototype.toString.call(x)
     if (str === '[object Object]') {
-      if (mapProps) return mapProps(x)
+      if (refSnapshot) return refSnapshot(x)
       tmp = {} // null
       for (k in x) {
-        if (!mapProps) {
-          if (k === '__proto__') {
-            Object.defineProperty(tmp, k, {
-              value: snapshot(x[k]),
-              configurable: true,
-              enumerable: true,
-              writable: true
-            })
-          } else {
-            tmp[k] = snapshot(x[k])
-          }
+        if (k === '__proto__') {
+          Object.defineProperty(tmp, k, {
+            value: snapshot(x[k]),
+            configurable: true,
+            enumerable: true,
+            writable: true
+          })
+        } else {
+          tmp[k] = snapshot(x[k])
         }
       }
       return tmp

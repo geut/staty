@@ -139,9 +139,9 @@ export const snapshot = (state, prop) => {
   return state
 }
 
-export const ref = (value, mapProps) => {
+export const ref = (value, snapshot) => {
   const obj = { __ref: value }
   Object.defineProperty(obj, kIsRef, { value: true, writable: false, enumerable: false })
-  Object.defineProperty(obj, 'mapProps', { value: mapProps, writable: false, enumerable: false })
+  Object.defineProperty(obj, 'snapshot', { value: snapshot, writable: false, enumerable: false })
   return obj
 }
