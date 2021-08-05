@@ -1,7 +1,9 @@
 import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 
-import { staty, subscribe, snapshot, ref } from '../src/index.js'
+import { staty, subscribe, subscribeByProp, snapshot, ref } from '../src/index.js'
+
+const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
 test('subscription', async () => {
   const state = staty({
@@ -29,7 +31,7 @@ test('subscription', async () => {
     calls.inner++
   })
 
-  subscribe(state.inner, 'val', val => {
+  subscribeByProp(state.inner, 'val', val => {
     calls['inner.val']++
   })
 
@@ -37,16 +39,14 @@ test('subscription', async () => {
     calls.arr++
   })
 
-  subscribe(state.arr[2], 'val', val => {
+  subscribeByProp(state.arr[2], 'val', val => {
     calls['arr.val']++
   })
 
   state.inner.val = 'change1'
   state.arr[2].val = 'change'
 
-  // console.log(snapshot(state))
-
-  await Promise.resolve()
+  await macroTask()
 
   assert.equal(calls, {
     root: 1,
@@ -95,6 +95,31 @@ test('ref', () => {
       sub: { id: 'id' }
     }
   })
+})
+
+test('recursive updates', async () => {
+  let calls = 0
+  const snapshots = []
+
+  const state = staty({
+    val: 0
+  })
+
+  subscribe(state, () => {
+    calls++
+    snapshots.push(snapshot(state))
+    state.val = 2
+  })
+
+  state.val = 1
+
+  await macroTask()
+
+  assert.is(calls, 2)
+  assert.equal(snapshots, [
+    { val: 1 },
+    { val: 2 }
+  ])
 })
 
 test.run()

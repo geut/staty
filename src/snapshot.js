@@ -1,21 +1,21 @@
+// based on https://github.com/lukeed/klona
+
 export const configureSnapshot = ({ kTarget, kIsRef }) => {
   return function snapshot (x) {
     x = x ? (x[kTarget] || x) : x
 
-    let refSnapshot
-
     if (typeof x !== 'object') return x
 
     if (x[kIsRef]) {
-      refSnapshot = x.snapshot
+      if (x.snapshot) return x.snapshot(x.__ref)
       x = x.__ref
     }
 
     let k
     let tmp
     const str = Object.prototype.toString.call(x)
+
     if (str === '[object Object]') {
-      if (refSnapshot) return refSnapshot(x)
       tmp = {} // null
       for (k in x) {
         if (k === '__proto__') {
@@ -74,8 +74,6 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
       return x.slice(0)
     }
 
-    // ArrayBuffer.isView(x)
-    // ~> `new` bcuz `Buffer.slice` => ref
     if (str.slice(-6) === 'Array]') {
       return new x.constructor(x)
     }

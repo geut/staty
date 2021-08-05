@@ -1,5 +1,5 @@
 # staty
-Template to create modules following the :snail: **GEUT** path
+Build a proxy-state from plain objects
 
 [![Build Status](https://travis-ci.com/geut/staty.svg?branch=main)](https://travis-ci.com/geut/staty)
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
@@ -10,11 +10,27 @@ Template to create modules following the :snail: **GEUT** path
 ## Install
 
 ```
+$ npm install @geut/staty
 ```
 
 ## Usage
 
-```
+```javascript
+import { staty, subscribe, subscribeByProp, snapshot } from '@geut/staty'
+
+const state = staty({
+  count: 0
+})
+
+subscribe(state, () => {
+  console.log(snapshot(state)) // { count: 1 }
+})
+
+subscribeByProp(state, 'count', () => {
+  console.log(snapshot(state, 'count')) // 1
+})
+
+state.count++
 ```
 
 ## Issues
