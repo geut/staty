@@ -64,7 +64,8 @@ test('snapshot', () => {
     arr: [0, 1, { val: '2' }],
     inner: {
       val: 'str'
-    }
+    },
+    nul: null
   })
 
   assert.equal(state, snapshot(state))

@@ -2,9 +2,11 @@
 
 export const configureSnapshot = ({ kTarget, kIsRef }) => {
   return function snapshot (x) {
-    x = x ? (x[kTarget] || x) : x
+    if (!x) return x
 
-    if (typeof x !== 'object') return x
+    x = x[kTarget] || x
+
+    if (!x || typeof x !== 'object') return x
 
     if (x[kIsRef]) {
       if (x.snapshot) return x.snapshot(x.__ref)
