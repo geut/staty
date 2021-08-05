@@ -46,5 +46,8 @@
   "bugs": {
     "url": "https://github.com/geut/staty/issues"
   },
-  "homepage": "https://github.com/geut/staty#readme"
+  "homepage": "https://github.com/geut/staty#readme",
+  "publishConfig": {
+    "access": "public"
+  }
 }
