@@ -39,9 +39,11 @@ function schedule (state, init) {
 function _subscribe (state, handler, prop) {
   let lastValue = prop && state[prop]
   state[kSubscriptions].set(handler, () => {
-    if (!prop || lastValue !== state[prop]) {
+    if (prop && lastValue !== state[prop]) {
       lastValue = state[prop]
-      handler(state[prop])
+      handler()
+    } else if (!prop) {
+      handler()
     }
   })
   return () => {
@@ -150,7 +152,7 @@ export function subscribe (state, handler) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribeByProp (state, prop, handler) {
-  prop = Array.isArray(prop) || prop.split('.')
+  prop = Array.isArray(prop) ? prop : prop.split('.')
 
   const value = delve(state, prop)
   if (value && typeof value === 'object' && value[kSubscriptions]) {
