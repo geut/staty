@@ -123,4 +123,13 @@ test('recursive updates', async () => {
   ])
 })
 
+test('cache snapshot', async () => {
+  const state = staty({
+    val: 0
+  })
+
+  const snap = snapshot(state)
+  assert.is(snap, snapshot(state))
+})
+
 test.run()

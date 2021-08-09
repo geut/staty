@@ -6,14 +6,16 @@ import { configureSnapshot } from './snapshot.js'
 const kTarget = Symbol('target')
 const kSubscriptions = Symbol('subscribe')
 const kParents = Symbol('parents')
-const kIsRef = Symbol('kIsRef')
+const kIsRef = Symbol('isref')
+const kCacheSnapshot = Symbol('cachesnapshot')
 
-const _snapshot = configureSnapshot({ kTarget, kIsRef })
+const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
 
 const batch = new Set()
 
 function schedule (state, init) {
   batch.add(state)
+  state[kCacheSnapshot].value = null
 
   const parents = state[kParents]
 
@@ -37,9 +39,11 @@ function schedule (state, init) {
 function _subscribe (state, handler, prop) {
   let lastValue = prop && state[prop]
   state[kSubscriptions].set(handler, () => {
-    if (!prop || lastValue !== state[prop]) {
+    if (prop && lastValue !== state[prop]) {
       lastValue = state[prop]
-      handler(state[prop])
+      handler()
+    } else if (!prop) {
+      handler()
     }
   })
   return () => {
@@ -60,12 +64,14 @@ function _subscribe (state, handler, prop) {
 export function staty (target = {}) {
   const subscriptions = new Map()
   const parents = new Set()
+  const cacheSnapshot = { value: null }
 
   const state = new Proxy(target, {
     get (target, prop) {
       if (prop === kTarget) return target
       if (prop === kSubscriptions) return subscriptions
       if (prop === kParents) return parents
+      if (prop === kCacheSnapshot) return cacheSnapshot
 
       if (!(Reflect.has(target, prop))) return
 
@@ -146,7 +152,7 @@ export function subscribe (state, handler) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribeByProp (state, prop, handler) {
-  prop = Array.isArray(prop) || prop.split('.')
+  prop = Array.isArray(prop) ? prop : prop.split('.')
 
   const value = delve(state, prop)
   if (value && typeof value === 'object' && value[kSubscriptions]) {
