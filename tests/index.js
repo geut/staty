@@ -23,23 +23,23 @@ test('subscription', async () => {
     'inner.val': 0
   }
 
-  subscribe(state, val => {
+  subscribe(state, () => {
     calls.root++
   })
 
-  subscribe(state.inner, val => {
+  subscribe(state.inner, () => {
     calls.inner++
   })
 
-  subscribeByProp(state.inner, 'val', val => {
+  subscribeByProp(state.inner, 'val', () => {
     calls['inner.val']++
   })
 
-  subscribe(state.arr, val => {
+  subscribe(state.arr, () => {
     calls.arr++
   })
 
-  subscribeByProp(state.arr[2], 'val', val => {
+  subscribeByProp(state.arr[2], 'val', () => {
     calls['arr.val']++
   })
 
