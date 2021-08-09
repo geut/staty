@@ -1,8 +1,11 @@
 // based on https://github.com/lukeed/klona
 
-export const configureSnapshot = ({ kTarget, kIsRef }) => {
+export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
   return function snapshot (x) {
     if (!x) return x
+
+    const cacheSnapshot = x[kCacheSnapshot]
+    if (cacheSnapshot && cacheSnapshot.value) return cacheSnapshot.value
 
     x = x[kTarget] || x
 
@@ -31,6 +34,7 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
           tmp[k] = snapshot(x[k])
         }
       }
+      if (cacheSnapshot) cacheSnapshot.value = tmp
       return tmp
     }
 
@@ -39,6 +43,7 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
       for (tmp = Array(k); k--;) {
         tmp[k] = snapshot(x[k])
       }
+      if (cacheSnapshot) cacheSnapshot.value = tmp
       return tmp
     }
 
@@ -47,6 +52,7 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
       x.forEach(function (val) {
         tmp.add(snapshot(val))
       })
+      if (cacheSnapshot) cacheSnapshot.value = tmp
       return tmp
     }
 
@@ -55,29 +61,39 @@ export const configureSnapshot = ({ kTarget, kIsRef }) => {
       x.forEach(function (val, key) {
         tmp.set(snapshot(key), snapshot(val))
       })
+      if (cacheSnapshot) cacheSnapshot.value = tmp
       return tmp
     }
 
     if (str === '[object Date]') {
-      return new Date(+x)
+      tmp = new Date(+x)
+      if (cacheSnapshot) cacheSnapshot.value = tmp
+      return tmp
     }
 
     if (str === '[object RegExp]') {
       tmp = new RegExp(x.source, x.flags)
       tmp.lastIndex = x.lastIndex
+      if (cacheSnapshot) cacheSnapshot.value = tmp
       return tmp
     }
 
     if (str === '[object DataView]') {
-      return new x.constructor(snapshot(x.buffer))
+      tmp = new x.constructor(snapshot(x.buffer))
+      if (cacheSnapshot) cacheSnapshot.value = tmp
+      return tmp
     }
 
     if (str === '[object ArrayBuffer]') {
-      return x.slice(0)
+      tmp = x.slice(0)
+      if (cacheSnapshot) cacheSnapshot.value = tmp
+      return tmp
     }
 
     if (str.slice(-6) === 'Array]') {
-      return new x.constructor(x)
+      tmp = new x.constructor(x)
+      if (cacheSnapshot) cacheSnapshot.value = tmp
+      return tmp
     }
 
     return x
