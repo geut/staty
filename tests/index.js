@@ -130,6 +130,12 @@ test('cache snapshot', async () => {
 
   const snap = snapshot(state)
   assert.is(snap, snapshot(state))
+
+  state.val = 1
+
+  const snap2 = snapshot(state)
+  assert.is.not(snap, snap2)
+  assert.is(snap2, snapshot(state))
 })
 
 test.run()
