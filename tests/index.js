@@ -138,4 +138,24 @@ test('cache snapshot', async () => {
   assert.is(snap2, snapshot(state))
 })
 
+test('subscribeByProp arrays', async () => {
+  let calls = 0
+
+  const state = staty({
+    num0: 0,
+    num1: 0,
+    num2: 0
+  })
+
+  subscribeByProp(state, ['num0', 'num1'], () => {
+    calls++
+  })
+
+  state.num0++
+  state.num1++
+
+  await macroTask()
+
+  assert.is(calls, 1)
+})
 test.run()

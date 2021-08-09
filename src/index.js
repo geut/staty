@@ -51,6 +51,18 @@ function _subscribe (state, handler, prop) {
   }
 }
 
+function _subscribeByProp (state, prop, handler) {
+  prop = prop.split('.')
+
+  const value = delve(state, prop)
+  if (value && typeof value === 'object' && value[kSubscriptions]) {
+    return _subscribe(value, handler)
+  } else {
+    const parent = prop.length === 1 ? state : delve(value, prop.slice(0, -1))
+    return _subscribe(parent, handler, prop.slice(-1)[0])
+  }
+}
+
 /**
  * @callback UnsubscribeFunction
  */
@@ -152,15 +164,20 @@ export function subscribe (state, handler) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribeByProp (state, prop, handler) {
-  prop = Array.isArray(prop) ? prop : prop.split('.')
+  if (!Array.isArray(prop)) return _subscribeByProp(state, prop, handler)
 
-  const value = delve(state, prop)
-  if (value && typeof value === 'object' && value[kSubscriptions]) {
-    return _subscribe(value, handler)
-  } else {
-    const parent = prop.length === 1 ? state : delve(value, prop.slice(0, -1))
-    return _subscribe(parent, handler, prop.slice(-1)[0])
-  }
+  let scheduled = false
+  const unsubscribes = prop.map(p => _subscribeByProp(state, p, () => {
+    if (!scheduled) {
+      scheduled = true
+      handler()
+      queueMicrotask(() => {
+        scheduled = false
+      })
+    }
+  }))
+
+  return () => unsubscribes.forEach(unsubscribe => unsubscribe())
 }
 
 /**
