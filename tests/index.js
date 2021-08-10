@@ -162,4 +162,24 @@ test('subscribeByProp arrays', async () => {
 
   assert.is(calls, 1)
 })
+
+test('array push/splice', async () => {
+  let calls = 0
+
+  const state = staty({
+    arr: []
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  state.arr.push('val')
+  await macroTask()
+
+  state.arr.splice(0, 1)
+  await macroTask()
+
+  assert.is(calls, 2)
+})
 test.run()
