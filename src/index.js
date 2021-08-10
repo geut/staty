@@ -119,6 +119,13 @@ export function staty (target = {}) {
     set (target, prop, value) {
       const oldValue = Reflect.get(target, prop)
 
+      if (value[kIsRef]) {
+        if (Reflect.set(target, prop, value)) {
+          schedule(state, prop, true)
+        }
+        return true
+      }
+
       // ref
       if (oldValue && oldValue[kIsRef]) {
         if (oldValue === value || oldValue.__ref === value) return true
@@ -131,7 +138,7 @@ export function staty (target = {}) {
       if (oldValue === value) return true
 
       const type = Object.prototype.toString.call(value)
-      if ((type === '[object Object]' || type === '[object Array]') && !value[kIsRef]) {
+      if (type === '[object Object]' || type === '[object Array]') {
         let parents = value[kParents]
         if (!parents) {
           value = staty(value)
