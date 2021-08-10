@@ -131,7 +131,7 @@ export function staty (target = {}) {
       if (oldValue === value) return true
 
       const type = Object.prototype.toString.call(value)
-      if (type === '[object Object]' || type === '[object Array]') {
+      if ((type === '[object Object]' || type === '[object Array]') && !value[kIsRef]) {
         let parents = value[kParents]
         if (!parents) {
           value = staty(value)

@@ -1,5 +1,6 @@
 import { test } from 'uvu'
 import * as assert from 'uvu/assert'
+import util from 'util'
 
 import { staty, subscribe, subscribeByProp, snapshot, ref } from '../src/index.js'
 
@@ -89,6 +90,8 @@ test('ref', () => {
   assert.is(state.inner.sub.val, 'val')
   state.inner.sub.val = 'changed'
   assert.is(state.inner.sub.val, 'changed')
+  state.external = ref({ val: 'external' })
+  assert.not.ok(util.types.isProxy(state.external))
   assert.equal(snapshot(state), {
     val: 'str',
     num: 0,
@@ -96,7 +99,8 @@ test('ref', () => {
     inner: {
       val: 'str',
       sub: { id: 'id' }
-    }
+    },
+    external: { val: 'external' }
   })
 })
 
