@@ -41,7 +41,7 @@ function _subscribe (state, handler, prop) {
   state[kSubscriptions].set(handler, () => {
     if (prop && lastValue !== state[prop]) {
       lastValue = state[prop]
-      handler()
+      handler(snapshot(state, prop))
     } else if (!prop) {
       handler()
     }
@@ -61,6 +61,14 @@ function _subscribeByProp (state, prop, handler) {
     const parent = prop.length === 1 ? state : delve(value, prop.slice(0, -1))
     return _subscribe(parent, handler, prop.slice(-1)[0])
   }
+}
+
+function _snapshotProp (state, prop) {
+  state = delve(state, prop)
+  if (state && typeof state === 'object') {
+    return _snapshot(state)
+  }
+  return state
 }
 
 /**
@@ -170,7 +178,7 @@ export function subscribeByProp (state, prop, handler) {
   const unsubscribes = prop.map(p => _subscribeByProp(state, p, () => {
     if (!scheduled) {
       scheduled = true
-      handler()
+      handler(snapshot(state, prop))
       queueMicrotask(() => {
         scheduled = false
       })
@@ -188,11 +196,15 @@ export function subscribeByProp (state, prop, handler) {
  * @returns {Object}
  */
 export const snapshot = (state, prop) => {
-  state = prop ? delve(state, prop) : state
-  if (state && typeof state === 'object') {
-    return _snapshot(state)
+  if (Array.isArray(prop)) {
+    return prop.map(p => _snapshotProp(state, p))
   }
-  return state
+
+  if (typeof prop === 'string') {
+    return _snapshotProp(state, prop)
+  }
+
+  return _snapshot(state)
 }
 
 /**

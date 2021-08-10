@@ -31,19 +31,21 @@ test('subscription', async () => {
     calls.inner++
   })
 
-  subscribeByProp(state.inner, 'val', () => {
+  subscribeByProp(state.inner, 'val', (val) => {
     calls['inner.val']++
+    assert.is(val, 'change')
   })
 
   subscribe(state.arr, () => {
     calls.arr++
   })
 
-  subscribeByProp(state.arr[2], 'val', () => {
+  subscribeByProp(state.arr[2], 'val', (val) => {
     calls['arr.val']++
+    assert.is(val, 'change')
   })
 
-  state.inner.val = 'change1'
+  state.inner.val = 'change'
   state.arr[2].val = 'change'
 
   await macroTask()
@@ -147,8 +149,10 @@ test('subscribeByProp arrays', async () => {
     num2: 0
   })
 
-  subscribeByProp(state, ['num0', 'num1'], () => {
+  subscribeByProp(state, ['num0', 'num1'], ([num0, num1]) => {
     calls++
+    assert.is(num0, 1)
+    assert.is(num1, 1)
   })
 
   state.num0++
