@@ -119,7 +119,7 @@ export function staty (target = {}) {
     set (target, prop, value) {
       const oldValue = Reflect.get(target, prop)
 
-      if (value[kIsRef]) {
+      if (value && value[kIsRef]) {
         if (Reflect.set(target, prop, value)) {
           schedule(state, prop, true)
         }
