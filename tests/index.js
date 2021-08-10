@@ -186,4 +186,22 @@ test('array push/splice', async () => {
 
   assert.is(calls, 2)
 })
+
+test('subscribe missing prop', async () => {
+  let calls = 0
+
+  const state = staty({
+    metadata: {}
+  })
+
+  subscribeByProp(state, 'metadata.missing', () => {
+    calls++
+  })
+
+  state.metadata.missing = 'change'
+  await macroTask()
+
+  assert.is(calls, 1)
+})
+
 test.run()

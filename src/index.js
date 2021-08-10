@@ -36,12 +36,12 @@ function schedule (state, init) {
   }
 }
 
-function _subscribe (state, handler, prop) {
+function _subscribe (state, handler, prop, avoidSnapshot) {
   let lastValue = prop && state[prop]
   state[kSubscriptions].set(handler, () => {
     if (prop && lastValue !== state[prop]) {
       lastValue = state[prop]
-      handler(snapshot(state, prop))
+      handler(avoidSnapshot ? undefined : snapshot(state, prop))
     } else if (!prop) {
       handler()
     }
@@ -51,15 +51,15 @@ function _subscribe (state, handler, prop) {
   }
 }
 
-function _subscribeByProp (state, prop, handler) {
+function _subscribeByProp (state, prop, handler, avoidSnapshot) {
   prop = prop.split('.')
 
   const value = delve(state, prop)
   if (value && typeof value === 'object' && value[kSubscriptions]) {
-    return _subscribe(value, handler)
+    return _subscribe(value, handler, avoidSnapshot)
   } else {
-    const parent = prop.length === 1 ? state : delve(value, prop.slice(0, -1))
-    return _subscribe(parent, handler, prop.slice(-1)[0])
+    const parent = prop.length === 1 ? state : delve(state, prop.slice(0, -1))
+    return _subscribe(parent, handler, prop.slice(-1)[0], avoidSnapshot)
   }
 }
 
@@ -182,7 +182,7 @@ export function subscribeByProp (state, prop, handler) {
   if (!Array.isArray(prop)) return _subscribeByProp(state, prop, handler)
 
   let scheduled = false
-  const unsubscribes = prop.map(p => _subscribeByProp(state, p, () => {
+  const unsubscribes = prop.map(p => _subscribeByProp(state, p, (val) => {
     if (!scheduled) {
       scheduled = true
       handler(snapshot(state, prop))
@@ -190,7 +190,7 @@ export function subscribeByProp (state, prop, handler) {
         scheduled = false
       })
     }
-  }))
+  }, true))
 
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
 }
