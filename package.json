@@ -17,6 +17,7 @@
     "prepublishOnly": "npm test"
   },
   "dependencies": {
+    "dequal": "^2.0.2",
     "dlv": "^1.1.3"
   },
   "devDependencies": {

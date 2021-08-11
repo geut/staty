@@ -36,30 +36,22 @@ function schedule (state, init) {
   }
 }
 
-function _subscribe (state, handler, prop, avoidSnapshot) {
-  let lastValue = prop && state[prop]
-  state[kSubscriptions].set(handler, () => {
-    if (prop && lastValue !== state[prop]) {
-      lastValue = state[prop]
-      handler(avoidSnapshot ? undefined : snapshot(state, prop))
-    } else if (!prop) {
-      handler()
-    }
-  })
+function _subscribe (state, handler) {
+  state[kSubscriptions].set(handler, handler)
   return () => {
     state[kSubscriptions].delete(handler)
   }
 }
 
-function _subscribeByProp (state, prop, handler, avoidSnapshot) {
+function _parseProp (state, prop) {
   prop = prop.split('.')
 
   const value = delve(state, prop)
   if (value && typeof value === 'object' && value[kSubscriptions]) {
-    return _subscribe(value, handler, avoidSnapshot)
+    return { state: value }
   } else {
     const parent = prop.length === 1 ? state : delve(state, prop.slice(0, -1))
-    return _subscribe(parent, handler, prop.slice(-1)[0], avoidSnapshot)
+    return { state: parent, prop: prop.slice(-1)[0] }
   }
 }
 
@@ -179,18 +171,50 @@ export function subscribe (state, handler) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribeByProp (state, prop, handler) {
-  if (!Array.isArray(prop)) return _subscribeByProp(state, prop, handler)
+  let prevSnapshot
+
+  if (!Array.isArray(prop)) {
+    const { state: newState, prop: newProp } = _parseProp(state, prop, handler)
+    prevSnapshot = newProp && snapshot(newState, newProp)
+    return _subscribe(newState, () => {
+      if (!newProp) handler(snapshot(newState))
+      const nextSnapshot = snapshot(newState, newProp)
+      if (prevSnapshot !== nextSnapshot) {
+        prevSnapshot = nextSnapshot
+        handler(nextSnapshot)
+      }
+    })
+  }
 
   let scheduled = false
-  const unsubscribes = prop.map(p => _subscribeByProp(state, p, (val) => {
-    if (!scheduled) {
-      scheduled = true
-      handler(snapshot(state, prop))
-      queueMicrotask(() => {
-        scheduled = false
-      })
-    }
-  }, true))
+  prevSnapshot = snapshot(state, prop)
+  const unsubscribes = prop.map(p => {
+    const { state: newState } = _parseProp(state, p, handler)
+    return _subscribe(newState, () => {
+      if (!scheduled) {
+        scheduled = true
+
+        const nextSnapshot = snapshot(state, prop)
+
+        let equal = true
+        for (let i = 0; i < prop.length; i++) {
+          if (prevSnapshot[i] !== nextSnapshot[i]) {
+            equal = false
+            break
+          }
+        }
+
+        if (!equal) {
+          prevSnapshot = nextSnapshot
+          handler(nextSnapshot)
+        }
+
+        queueMicrotask(() => {
+          scheduled = false
+        })
+      }
+    })
+  })
 
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
 }

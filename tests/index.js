@@ -150,10 +150,11 @@ test('subscribeByProp arrays', async () => {
   const state = staty({
     num0: 0,
     num1: 0,
-    num2: 0
+    num2: 0,
+    arr: []
   })
 
-  subscribeByProp(state, ['num0', 'num1'], ([num0, num1]) => {
+  subscribeByProp(state, ['num0', 'num1', 'arr'], ([num0, num1]) => {
     calls++
     assert.is(num0, 1)
     assert.is(num1, 1)
@@ -163,8 +164,15 @@ test('subscribeByProp arrays', async () => {
   state.num1++
 
   await macroTask()
-
   assert.is(calls, 1)
+
+  state.arr.push(0)
+  await macroTask()
+  assert.is(calls, 2)
+
+  state.num2 = 1
+  await macroTask()
+  assert.is(calls, 2)
 })
 
 test('array push/splice', async () => {
