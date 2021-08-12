@@ -212,4 +212,35 @@ test('subscribe missing prop', async () => {
   assert.is(calls, 1)
 })
 
+test('unsubscribe', async () => {
+  let calls = 0
+  const subscriptions = []
+
+  const state = staty({
+    val: 0
+  })
+
+  subscriptions.push(subscribe(state, () => {
+    calls++
+  }))
+
+  subscriptions.push(subscribeByProp(state, 'val', () => {
+    calls++
+  }))
+
+  subscriptions.push(subscribeByProp(state, ['val'], () => {
+    calls++
+  }))
+
+  state.val = 1
+  await macroTask()
+  assert.is(calls, 3)
+
+  state.val = 1
+  // unsubscribe should be immediately
+  subscriptions.forEach(unsubscribe => unsubscribe())
+  await macroTask()
+  assert.is(calls, 3)
+})
+
 test.run()
