@@ -27,11 +27,15 @@ function schedule (state, init) {
 
   if (init) {
     queueMicrotask(() => {
-      const batchToProcess = Array.from(batch.values())
-      batch.clear()
-      batchToProcess.forEach(batchState => {
-        batchState[kSubscriptions].forEach(handler => handler())
-      })
+      try {
+        const batchToProcess = Array.from(batch.values())
+        batch.clear()
+        batchToProcess.forEach(batchState => {
+          batchState[kSubscriptions].forEach(handler => handler())
+        })
+      } catch (err) {
+        console.error(err)
+      }
     })
   }
 }
