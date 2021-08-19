@@ -61,11 +61,17 @@ function _parseProp (state, prop) {
 }
 
 function _snapshotProp (state, prop) {
-  state = delve(state, prop)
-  if (state && typeof state === 'object' && state[kStaty]) {
-    return _snapshot(state)
+  const value = delve(state, prop)
+
+  if (!value || typeof value !== 'object') {
+    return value
   }
-  return state
+
+  if (value[kStaty]) {
+    return _snapshot(value)
+  }
+
+  return _snapshot(state)[prop]
 }
 
 /**
