@@ -256,4 +256,14 @@ test('error comparing buffers on snapshots', () => {
   assert.is(prev, next)
 })
 
+test('error by set references as undefined', () => {
+  const state = staty({
+    val: ref({}, val => val)
+  })
+
+  assert.not.throws(() => {
+    state.val = undefined
+  })
+})
+
 test.run()

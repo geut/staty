@@ -133,7 +133,7 @@ export function staty (target = {}) {
       // ref
       if (oldValue && oldValue[kIsRef]) {
         if (oldValue === value || oldValue.__ref === value) return true
-        if (!value[kIsRef] && Reflect.set(oldValue, '__ref', value)) {
+        if ((!value || !value[kIsRef]) && Reflect.set(oldValue, '__ref', value)) {
           schedule(state, prop, true)
         }
         return true
