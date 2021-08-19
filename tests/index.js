@@ -243,4 +243,17 @@ test('unsubscribe', async () => {
   assert.is(calls, 3)
 })
 
+test('error comparing buffers on snapshots', () => {
+  const state = staty({
+    val: 0,
+    buf: ref(Buffer.from('test'), buf => buf)
+  })
+
+  const prev = snapshot(state, 'buf')
+  state.val++
+  const next = snapshot(state, 'buf')
+
+  assert.is(prev, next)
+})
+
 test.run()

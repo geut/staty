@@ -3,6 +3,7 @@
 import delve from 'dlv'
 import { configureSnapshot } from './snapshot.js'
 
+const kStaty = Symbol('staty')
 const kTarget = Symbol('target')
 const kSubscriptions = Symbol('subscribe')
 const kParents = Symbol('parents')
@@ -61,7 +62,7 @@ function _parseProp (state, prop) {
 
 function _snapshotProp (state, prop) {
   state = delve(state, prop)
-  if (state && typeof state === 'object') {
+  if (state && typeof state === 'object' && state[kStaty]) {
     return _snapshot(state)
   }
   return state
@@ -84,6 +85,7 @@ export function staty (target = {}) {
 
   const state = new Proxy(target, {
     get (target, prop) {
+      if (prop === kStaty) return true
       if (prop === kTarget) return target
       if (prop === kSubscriptions) return subscriptions
       if (prop === kParents) return parents
