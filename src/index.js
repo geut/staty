@@ -123,17 +123,19 @@ export function staty (target = {}) {
     set (target, prop, value) {
       const oldValue = Reflect.get(target, prop)
 
+      // start ref support
       if (value && value[kIsRef]) {
         if (Reflect.set(target, prop, value)) {
+          value[kCacheSnapshot].value = null
           schedule(state, prop, true)
         }
         return true
       }
 
-      // ref
       if (oldValue && oldValue[kIsRef]) {
         if (oldValue === value || oldValue.__ref === value) return true
         if ((!value || !value[kIsRef]) && Reflect.set(oldValue, '__ref', value)) {
+          oldValue[kCacheSnapshot].value = null
           schedule(state, prop, true)
         }
         return true
@@ -260,6 +262,7 @@ export const snapshot = (state, prop) => {
 export const ref = (value, snapshot) => {
   const obj = { __ref: value }
   Object.defineProperty(obj, kIsRef, { value: true, writable: false, enumerable: false })
+  Object.defineProperty(obj, kCacheSnapshot, { value: { value: null }, writable: true, enumerable: false })
   Object.defineProperty(obj, 'snapshot', { value: snapshot, writable: false, enumerable: false })
   return obj
 }

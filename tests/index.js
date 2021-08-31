@@ -266,4 +266,29 @@ test('error by set references as undefined', () => {
   })
 })
 
+test('compare references', async () => {
+  let calls = 0
+
+  const state = staty({
+    val: ref({}, () => {
+      return {}
+    }),
+    num: 0
+  })
+
+  subscribeByProp(state, 'val', () => {
+    calls++
+  })
+
+  state.val = {}
+
+  await macroTask()
+
+  state.num = 1
+
+  await macroTask()
+
+  assert.is(calls, 1)
+})
+
 test.run()

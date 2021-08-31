@@ -12,7 +12,11 @@ export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
     if (!x || typeof x !== 'object') return x
 
     if (x[kIsRef]) {
-      if (x.snapshot) return x.snapshot(x.__ref)
+      if (x.snapshot) {
+        x = x.snapshot(x.__ref)
+        if (cacheSnapshot) cacheSnapshot.value = x
+        return x
+      }
       x = x.__ref
     }
 
