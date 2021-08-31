@@ -6,40 +6,12 @@ import { configureSnapshot } from './snapshot.js'
 const kStaty = Symbol('staty')
 const kTarget = Symbol('target')
 const kSubscriptions = Symbol('subscribe')
-const kParents = Symbol('parents')
+const kParent = Symbol('parents')
 const kIsRef = Symbol('isref')
 const kCacheSnapshot = Symbol('cachesnapshot')
+const kSchedule = Symbol('kSchedule')
 
 const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
-
-const batch = new Set()
-
-function schedule (state, init) {
-  batch.add(state)
-  state[kCacheSnapshot].value = null
-
-  const parents = state[kParents]
-
-  if (parents.size) {
-    parents.forEach(parent => {
-      if (!batch.has(parent)) schedule(parent)
-    })
-  }
-
-  if (init) {
-    queueMicrotask(() => {
-      try {
-        const batchToProcess = Array.from(batch.values())
-        batch.clear()
-        batchToProcess.forEach(batchState => {
-          batchState[kSubscriptions].forEach(handler => handler())
-        })
-      } catch (err) {
-        console.error(err)
-      }
-    })
-  }
-}
 
 function _subscribe (state, handler) {
   state[kSubscriptions].set(handler, handler)
@@ -86,16 +58,45 @@ function _snapshotProp (state, prop) {
  */
 export function staty (target = {}) {
   const subscriptions = new Map()
-  const parents = new Set()
+  const batch = new Set()
+  const parent = { value: null }
   const cacheSnapshot = { value: null }
+
+  function schedule (state, init) {
+    batch.add(state)
+    state[kCacheSnapshot].value = null
+
+    const parent = state[kParent]
+    if (parent.value && !batch.has(parent.value)) {
+      schedule(parent.value)
+    }
+
+    if (init) {
+      queueMicrotask(() => {
+        try {
+          const batchToProcess = Array.from(batch.values())
+          batch.clear()
+          batchToProcess.forEach(batchState => {
+            batchState[kSubscriptions].forEach(handler => handler())
+          })
+        } catch (err) {
+          console.error(err)
+        }
+      })
+    }
+  }
 
   const state = new Proxy(target, {
     get (target, prop) {
       if (prop === kStaty) return true
       if (prop === kTarget) return target
       if (prop === kSubscriptions) return subscriptions
-      if (prop === kParents) return parents
+      if (prop === kParent) return parent
       if (prop === kCacheSnapshot) return cacheSnapshot
+      if (prop === kSchedule) {
+        if (parent.value) return parent.value[kSchedule]
+        return schedule
+      }
 
       if (!(Reflect.has(target, prop))) return
 
@@ -108,13 +109,18 @@ export function staty (target = {}) {
 
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
-        let parents = value[kParents]
-        if (!parents) {
+        let parent = value[kParent]
+
+        if (parent && parent.value && parent.value !== state) throw new Error('A staty object cannot have multiple parents')
+
+        if (!parent) {
           value = staty(value)
           Reflect.set(target, prop, value)
-          parents = value[kParents]
+          parent = value[kParent]
         }
-        parents.add(state)
+
+        parent.value = state
+
         return value
       }
 
@@ -127,7 +133,7 @@ export function staty (target = {}) {
       if (value && value[kIsRef]) {
         if (Reflect.set(target, prop, value)) {
           value[kCacheSnapshot].value = null
-          schedule(state, prop, true)
+          state[kSchedule](state, prop, true)
         }
         return true
       }
@@ -136,7 +142,7 @@ export function staty (target = {}) {
         if (oldValue === value || oldValue.__ref === value) return true
         if ((!value || !value[kIsRef]) && Reflect.set(oldValue, '__ref', value)) {
           oldValue[kCacheSnapshot].value = null
-          schedule(state, prop, true)
+          state[kSchedule](state, prop, true)
         }
         return true
       }
@@ -145,16 +151,20 @@ export function staty (target = {}) {
 
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
-        let parents = value[kParents]
-        if (!parents) {
+        let parent = value[kParent]
+
+        if (parent && parent.value && parent.value !== state) throw new Error('A staty object cannot have multiple parents')
+
+        if (!parent) {
           value = staty(value)
-          parents = value[kParents]
+          parent = value[kParent]
         }
-        parents.add(state)
+
+        parent.value = state
       }
 
       if (Reflect.set(target, prop, value)) {
-        schedule(state, prop, true)
+        state[kSchedule](state, prop, true)
         return true
       }
 
