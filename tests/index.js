@@ -2,7 +2,7 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
-import { staty, subscribe, subscribeByProp, snapshot, ref } from '../src/index.js'
+import { staty, subscribe, subscribeByProp, snapshot, ref, listeners } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -289,6 +289,51 @@ test('compare references', async () => {
   await macroTask()
 
   assert.is(calls, 1)
+})
+
+test('unsubscribe', async () => {
+  let calls = 0
+
+  const state = staty({
+    prop0: undefined,
+    prop1: {
+      prop2: undefined,
+      prop3: [{ prop4: undefined }]
+    }
+  })
+
+  const unsubscribe = []
+
+  unsubscribe.push(subscribe(state, () => {
+    calls++
+  }))
+
+  unsubscribe.push(subscribeByProp(state, 'prop0', () => {
+    calls++
+  }))
+
+  unsubscribe.push(subscribeByProp(state, 'prop1.prop2', () => {
+    calls++
+  }))
+
+  unsubscribe.push(subscribeByProp(state, ['prop0', 'prop1.prop2'], () => {
+    calls++
+  }))
+
+  unsubscribe.push(subscribe(state.prop1.prop3[0], () => {
+    calls++
+  }))
+
+  assert.is(listeners(state).count, 6)
+
+  state.prop0 = 1
+  state.prop1.prop2 = 1
+  state.prop1.prop3[0].prop4 = 1
+  await macroTask()
+  assert.is(calls, 5)
+
+  unsubscribe.forEach(unsubscribe => unsubscribe())
+  assert.is(listeners(state).count, 0)
 })
 
 test.run()

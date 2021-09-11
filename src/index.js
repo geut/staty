@@ -1,7 +1,16 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 import delve from 'dlv'
+import debug from 'debug'
+
 import { configureSnapshot } from './snapshot.js'
+
+const log = debug('staty')
+log.log = (...args) => {
+  console.groupCollapsed(...args)
+  console.trace('Trace')
+  console.groupEnd()
+}
 
 const kStaty = Symbol('staty')
 const kTarget = Symbol('target')
@@ -13,10 +22,22 @@ const kSchedule = Symbol('kSchedule')
 
 const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
 
-function _subscribe (state, handler) {
-  state[kSubscriptions].set(handler, handler)
+function _subscribe (state, handler, prop) {
+  if (prop) {
+    if (!state[kSubscriptions].props.has(prop)) {
+      state[kSubscriptions].props.set(prop, new Set())
+    }
+    state[kSubscriptions].props.get(prop).add(handler)
+  } else {
+    state[kSubscriptions].default.add(handler)
+  }
+
   return () => {
-    state[kSubscriptions].delete(handler)
+    if (prop) {
+      state[kSubscriptions].props.get(prop).delete(handler)
+    } else {
+      state[kSubscriptions].default.delete(handler)
+    }
   }
 }
 
@@ -57,12 +78,16 @@ function _snapshotProp (state, prop) {
  * @returns {Proxy}
  */
 export function staty (target = {}) {
-  const subscriptions = new Map()
+  const subscriptions = {
+    default: new Set(),
+    props: new Map()
+  }
+
   const batch = new Set()
   const parent = { value: null }
   const cacheSnapshot = { value: null }
 
-  function schedule (state, init) {
+  function schedule (state, prop, init) {
     batch.add(state)
     state[kCacheSnapshot].value = null
 
@@ -72,12 +97,21 @@ export function staty (target = {}) {
     }
 
     if (init) {
+      if (log.enabled) {
+        log(`schedule${':' + prop} %O`, {
+          state: snapshot(state),
+          prop,
+          subscriptionProps: Array.from(subscriptions.props.keys())
+        })
+      }
+
       queueMicrotask(() => {
         try {
           const batchToProcess = Array.from(batch.values())
           batch.clear()
+          state[kSubscriptions].props.get(prop)?.forEach(handler => handler())
           batchToProcess.forEach(batchState => {
-            batchState[kSubscriptions].forEach(handler => handler())
+            batchState[kSubscriptions].default.forEach(handler => handler())
           })
         } catch (err) {
           console.error(err)
@@ -176,6 +210,40 @@ export function staty (target = {}) {
 }
 
 /**
+ * Get subscription listeners count
+ *
+ * @param {Proxy} state
+ * @returns {{ listeners: { default: Number, props: Object }, count }}
+ */
+export function listeners (state) {
+  if (!state[kSubscriptions]) throw new Error('state is not valid')
+
+  const result = {
+    default: state[kSubscriptions].default.size,
+    props: {}
+  }
+
+  let count = state[kSubscriptions].default.size
+  state[kSubscriptions].props.forEach((listeners, prop) => {
+    count += listeners.size
+    result.props[prop] = listeners.size
+  })
+
+  for (const prop in state) {
+    if (!state[prop]) continue
+
+    if (state[prop][kSubscriptions]) {
+      const value = listeners(state[prop])
+      result.props[prop] = value.listeners
+      count += value.count
+      continue
+    }
+  }
+
+  return { listeners: result, count }
+}
+
+/**
  * Subscribe for changes in the state
  *
  * @param {Proxy} state
@@ -195,49 +263,27 @@ export function subscribe (state, handler) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribeByProp (state, prop, handler) {
-  let prevSnapshot
-
   if (!Array.isArray(prop)) {
     const { state: newState, prop: newProp } = _parseProp(state, prop, handler)
-    prevSnapshot = newProp && snapshot(newState, newProp)
     return _subscribe(newState, () => {
-      if (!newProp) handler(snapshot(newState))
-      const nextSnapshot = snapshot(newState, newProp)
-      if (prevSnapshot !== nextSnapshot) {
-        prevSnapshot = nextSnapshot
-        handler(nextSnapshot)
-      }
-    })
+      if (!newProp) return handler(snapshot(newState))
+      handler(snapshot(newState, newProp))
+    }, newProp)
   }
 
   let scheduled = false
-  prevSnapshot = snapshot(state, prop)
   const unsubscribes = prop.map(p => {
-    const { state: newState } = _parseProp(state, p, handler)
+    const { state: newState, prop: newProp } = _parseProp(state, p, handler)
     return _subscribe(newState, () => {
       if (!scheduled) {
         scheduled = true
-
-        const nextSnapshot = snapshot(state, prop)
-
-        let equal = true
-        for (let i = 0; i < prop.length; i++) {
-          if (prevSnapshot[i] !== nextSnapshot[i]) {
-            equal = false
-            break
-          }
-        }
-
-        if (!equal) {
-          prevSnapshot = nextSnapshot
-          handler(nextSnapshot)
-        }
+        handler(snapshot(state, prop))
 
         queueMicrotask(() => {
           scheduled = false
         })
       }
-    })
+    }, newProp)
   })
 
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
