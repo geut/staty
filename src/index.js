@@ -219,14 +219,13 @@ export function listeners (state) {
   if (!state[kSubscriptions]) throw new Error('state is not valid')
 
   const result = {
-    default: state[kSubscriptions].default.size,
-    props: {}
+    '*': state[kSubscriptions].default.size
   }
 
   let count = state[kSubscriptions].default.size
   state[kSubscriptions].props.forEach((listeners, prop) => {
     count += listeners.size
-    result.props[prop] = listeners.size
+    result[prop] = listeners.size
   })
 
   for (const prop in state) {
@@ -234,7 +233,7 @@ export function listeners (state) {
 
     if (state[prop][kSubscriptions]) {
       const value = listeners(state[prop])
-      result.props[prop] = value.listeners
+      result[prop] = value.listeners
       count += value.count
       continue
     }
