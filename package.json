@@ -1,6 +1,6 @@
 {
   "name": "@geut/staty",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Build a proxy-state from plain objects",
   "type": "module",
   "exports": {
