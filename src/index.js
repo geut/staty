@@ -18,7 +18,8 @@ const kSubscriptions = Symbol('subscribe')
 const kParent = Symbol('parents')
 const kIsRef = Symbol('isref')
 const kCacheSnapshot = Symbol('cachesnapshot')
-const kSchedule = Symbol('kSchedule')
+const kSchedule = Symbol('schedule')
+const kUnderProp = Symbol('underprop')
 
 const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
 
@@ -38,18 +39,6 @@ function _subscribe (state, handler, prop) {
     } else {
       state[kSubscriptions].default.delete(handler)
     }
-  }
-}
-
-function _parseProp (state, prop) {
-  prop = prop.split('.')
-
-  const value = delve(state, prop)
-  if (value && typeof value === 'object' && value[kSubscriptions]) {
-    return { state: value }
-  } else {
-    const parent = prop.length === 1 ? state : delve(state, prop.slice(0, -1))
-    return { state: parent, prop: prop.slice(-1)[0] }
   }
 }
 
@@ -86,14 +75,21 @@ export function staty (target = {}) {
   const batch = new Set()
   const parent = { value: null }
   const cacheSnapshot = { value: null }
+  let underProp
 
   function schedule (state, prop, init) {
-    batch.add(state)
+    for (const [key, handlers] of state[kSubscriptions].props.entries()) {
+      if (prop.startsWith(key)) {
+        batch.add(handlers)
+      }
+    }
+    batch.add(state[kSubscriptions].default)
+
     state[kCacheSnapshot].value = null
 
     const parent = state[kParent]
     if (parent.value && !batch.has(parent.value)) {
-      schedule(parent.value)
+      schedule(parent.value, `${state[kUnderProp]}.${prop}`)
     }
 
     if (init) {
@@ -109,9 +105,8 @@ export function staty (target = {}) {
         try {
           const batchToProcess = Array.from(batch.values())
           batch.clear()
-          state[kSubscriptions].props.get(prop)?.forEach(handler => handler())
-          batchToProcess.forEach(batchState => {
-            batchState[kSubscriptions].default.forEach(handler => handler())
+          batchToProcess.forEach(handlers => {
+            handlers.forEach(handler => handler())
           })
         } catch (err) {
           console.error(err)
@@ -127,6 +122,7 @@ export function staty (target = {}) {
       if (prop === kSubscriptions) return subscriptions
       if (prop === kParent) return parent
       if (prop === kCacheSnapshot) return cacheSnapshot
+      if (prop === kUnderProp) return underProp
       if (prop === kSchedule) {
         if (parent.value) return parent.value[kSchedule]
         return schedule
@@ -149,6 +145,7 @@ export function staty (target = {}) {
 
         if (!parent) {
           value = staty(value)
+          value[kUnderProp] = prop
           Reflect.set(target, prop, value)
           parent = value[kParent]
         }
@@ -161,6 +158,11 @@ export function staty (target = {}) {
       return value
     },
     set (target, prop, value) {
+      if (prop === kUnderProp) {
+        underProp = value
+        return true
+      }
+
       const oldValue = Reflect.get(target, prop)
 
       // start ref support
@@ -191,6 +193,7 @@ export function staty (target = {}) {
 
         if (!parent) {
           value = staty(value)
+          value[kUnderProp] = prop
           parent = value[kParent]
         }
 
@@ -263,26 +266,24 @@ export function subscribe (state, handler) {
  */
 export function subscribeByProp (state, prop, handler) {
   if (!Array.isArray(prop)) {
-    const { state: newState, prop: newProp } = _parseProp(state, prop, handler)
-    return _subscribe(newState, () => {
-      if (!newProp) return handler(snapshot(newState))
-      handler(snapshot(newState, newProp))
-    }, newProp)
+    return _subscribe(state, () => {
+      handler(snapshot(state, prop))
+    }, prop)
   }
 
   let scheduled = false
-  const unsubscribes = prop.map(p => {
-    const { state: newState, prop: newProp } = _parseProp(state, p, handler)
-    return _subscribe(newState, () => {
+  const props = prop
+  const unsubscribes = prop.map(prop => {
+    return _subscribe(state, () => {
       if (!scheduled) {
         scheduled = true
-        handler(snapshot(state, prop))
+        handler(snapshot(state, props))
 
         queueMicrotask(() => {
           scheduled = false
         })
       }
-    }, newProp)
+    }, prop)
   })
 
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
