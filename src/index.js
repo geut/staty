@@ -216,6 +216,14 @@ export function staty (target = {}) {
       }
 
       return false
+    },
+
+    deleteProperty (target, prop) {
+      if (!(prop in target)) return false
+      if (Reflect.deleteProperty(target, prop)) {
+        state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
+        return true
+      }
     }
   })
 

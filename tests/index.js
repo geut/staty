@@ -329,4 +329,29 @@ test('patches', async () => {
   assert.is(calls, 1)
 })
 
+test('delete key', async () => {
+  let calls = 0
+
+  const state = staty({
+    prop0: 1,
+    inner: {
+      prop1: 1
+    }
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  subscribeByProp(state, 'inner', () => {
+    calls++
+  })
+
+  delete state.inner
+
+  await macroTask()
+
+  assert.is(calls, 2)
+})
+
 test.run()
