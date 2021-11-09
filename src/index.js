@@ -16,14 +16,19 @@ const kStaty = Symbol('staty')
 const kTarget = Symbol('target')
 const kSubscriptions = Symbol('subscribe')
 const kParent = Symbol('parents')
-const kIsRef = Symbol('isref')
-const kCacheSnapshot = Symbol('cachesnapshot')
+const kIsRef = Symbol('isRef')
+const kCacheSnapshot = Symbol('cacheSnapshot')
 const kSchedule = Symbol('schedule')
-const kUnderProp = Symbol('underprop')
+const kUnderProp = Symbol('underProp')
+const kPatches = Symbol('patches')
 
 const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
 
-function _subscribe (state, handler, prop) {
+function _subscribe (state, handler, prop, opts = {}) {
+  const { ignore = null } = opts
+
+  handler = { run: handler, ignore }
+
   if (prop) {
     if (!state[kSubscriptions].props.has(prop)) {
       state[kSubscriptions].props.set(prop, new Set())
@@ -75,9 +80,10 @@ export function staty (target = {}) {
   const batch = new Set()
   const parent = { value: null }
   const cacheSnapshot = { value: null }
+  const patches = []
   let underProp
 
-  function schedule (state, prop, init) {
+  function schedule (state, prop, opts = {}) {
     for (const [key, handlers] of state[kSubscriptions].props.entries()) {
       if (prop.startsWith(key)) {
         batch.add(handlers)
@@ -89,10 +95,10 @@ export function staty (target = {}) {
 
     const parent = state[kParent]
     if (parent.value && !batch.has(parent.value)) {
-      schedule(parent.value, `${state[kUnderProp]}.${prop}`)
+      schedule(parent.value, `${state[kUnderProp]}.${prop}`, { fromPatch: opts.fromPatch })
     }
 
-    if (init) {
+    if (opts.init) {
       if (log.enabled) {
         log(`schedule${':' + prop} %O`, {
           state: snapshot(state),
@@ -106,7 +112,10 @@ export function staty (target = {}) {
           const batchToProcess = Array.from(batch.values())
           batch.clear()
           batchToProcess.forEach(handlers => {
-            handlers.forEach(handler => handler())
+            handlers.forEach(handler => {
+              if (opts.currentPatch && handler.ignore && handler.ignore.test(opts.currentPatch)) return
+              handler.run()
+            })
           })
         } catch (err) {
           console.error(err)
@@ -127,6 +136,7 @@ export function staty (target = {}) {
         if (parent.value) return parent.value[kSchedule]
         return schedule
       }
+      if (prop === kPatches) return patches
 
       if (!(Reflect.has(target, prop))) return
 
@@ -169,7 +179,7 @@ export function staty (target = {}) {
       if (value && value[kIsRef]) {
         if (Reflect.set(target, prop, value)) {
           value[kCacheSnapshot].value = null
-          state[kSchedule](state, prop, true)
+          state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
         }
         return true
       }
@@ -178,7 +188,7 @@ export function staty (target = {}) {
         if (oldValue === value || oldValue.__ref === value) return true
         if ((!value || !value[kIsRef]) && Reflect.set(oldValue, '__ref', value)) {
           oldValue[kCacheSnapshot].value = null
-          state[kSchedule](state, prop, true)
+          state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
         }
         return true
       }
@@ -201,7 +211,7 @@ export function staty (target = {}) {
       }
 
       if (Reflect.set(target, prop, value)) {
-        state[kSchedule](state, prop, true)
+        state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
         return true
       }
 
@@ -250,10 +260,11 @@ export function listeners (state) {
  *
  * @param {Proxy} state
  * @param {function} handler
+ * @param {Object} opts
  * @returns {UnsubscribeFunction}
  */
-export function subscribe (state, handler) {
-  return _subscribe(state, handler)
+export function subscribe (state, handler, opts = {}) {
+  return _subscribe(state, handler, null, opts)
 }
 
 /**
@@ -262,13 +273,14 @@ export function subscribe (state, handler) {
  * @param {Proxy} state
  * @param {(String|Array<String>)} prop
  * @param {function} handler
+ * @param {Object} opts
  * @returns {UnsubscribeFunction}
  */
-export function subscribeByProp (state, prop, handler) {
+export function subscribeByProp (state, prop, handler, opts = {}) {
   if (!Array.isArray(prop)) {
     return _subscribe(state, () => {
       handler(snapshot(state, prop))
-    }, prop)
+    }, prop, opts)
   }
 
   let scheduled = false
@@ -283,7 +295,7 @@ export function subscribeByProp (state, prop, handler) {
           scheduled = false
         })
       }
-    }, prop)
+    }, prop, opts)
   })
 
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
@@ -321,4 +333,16 @@ export const ref = (value, snapshot) => {
   Object.defineProperty(obj, kCacheSnapshot, { value: { value: null }, writable: true, enumerable: false })
   Object.defineProperty(obj, 'snapshot', { value: snapshot, writable: false, enumerable: false })
   return obj
+}
+
+/**
+ * Change values of the state
+ * @param {*} state
+ * @param {Function} handler
+ */
+export const patch = (state, handler, name = '*') => {
+  state[kPatches].push(name)
+  const result = handler(state)
+  state[kPatches].pop()
+  return result
 }

@@ -2,7 +2,7 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
-import { staty, subscribe, subscribeByProp, snapshot, ref, listeners } from '../src/index.js'
+import { staty, subscribe, subscribeByProp, snapshot, ref, listeners, patch } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -303,6 +303,30 @@ test('unsubscribe', async () => {
 
   unsubscribe.forEach(unsubscribe => unsubscribe())
   assert.is(listeners(state).count, 0)
+})
+
+test('patches', async () => {
+  let calls = 0
+
+  const state = staty({
+    prop0: 0
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  subscribe(state, () => {
+    calls++
+  }, { ignore: /\*/ })
+
+  patch(state, state => {
+    state.prop0++
+  })
+
+  await macroTask()
+
+  assert.is(calls, 1)
 })
 
 test.run()
