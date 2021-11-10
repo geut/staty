@@ -136,7 +136,10 @@ export function staty (target = {}) {
       if (prop === kParent) return parent
       if (prop === kCacheSnapshot) return cacheSnapshot
       if (prop === kUnderProp) return underProp
-      if (prop === kProcessBatch) return processBatch
+      if (prop === kProcessBatch) {
+        if (parent.value) return parent.value[kProcessBatch]
+        return processBatch
+      }
       if (prop === kSchedule) {
         if (parent.value) return parent.value[kSchedule]
         return schedule
