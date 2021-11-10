@@ -20,7 +20,7 @@ const kIsRef = Symbol('isRef')
 const kCacheSnapshot = Symbol('cacheSnapshot')
 const kSchedule = Symbol('schedule')
 const kUnderProp = Symbol('underProp')
-const kPatches = Symbol('patches')
+const kProcessBatch = Symbol('processBatch')
 
 const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
 
@@ -80,25 +80,40 @@ export function staty (target = {}) {
   const batch = new Set()
   const parent = { value: null }
   const cacheSnapshot = { value: null }
-  const patches = []
   let underProp
 
-  function schedule (state, prop, opts = {}) {
+  function processBatch (opts = {}) {
+    try {
+      const jobs = Array.from(batch.values())
+      batch.clear()
+      jobs.forEach(handlers => {
+        handlers.forEach(handler => {
+          if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
+          handler.run()
+        })
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  function schedule (state, prop, init) {
     for (const [key, handlers] of state[kSubscriptions].props.entries()) {
       if (prop.startsWith(key)) {
         batch.add(handlers)
       }
     }
+
     batch.add(state[kSubscriptions].default)
 
     state[kCacheSnapshot].value = null
 
     const parent = state[kParent]
     if (parent.value && !batch.has(parent.value)) {
-      schedule(parent.value, `${state[kUnderProp]}.${prop}`, { fromPatch: opts.fromPatch })
+      schedule(parent.value, `${state[kUnderProp]}.${prop}`, { batch })
     }
 
-    if (opts.init) {
+    if (init) {
       if (log.enabled) {
         log(`schedule${':' + prop} %O`, {
           state: snapshot(state),
@@ -108,18 +123,7 @@ export function staty (target = {}) {
       }
 
       queueMicrotask(() => {
-        try {
-          const batchToProcess = Array.from(batch.values())
-          batch.clear()
-          batchToProcess.forEach(handlers => {
-            handlers.forEach(handler => {
-              if (opts.currentPatch && handler.ignore && handler.ignore.test(opts.currentPatch)) return
-              handler.run()
-            })
-          })
-        } catch (err) {
-          console.error(err)
-        }
+        processBatch(batch)
       })
     }
   }
@@ -132,11 +136,11 @@ export function staty (target = {}) {
       if (prop === kParent) return parent
       if (prop === kCacheSnapshot) return cacheSnapshot
       if (prop === kUnderProp) return underProp
+      if (prop === kProcessBatch) return processBatch
       if (prop === kSchedule) {
         if (parent.value) return parent.value[kSchedule]
         return schedule
       }
-      if (prop === kPatches) return patches
 
       if (!(Reflect.has(target, prop))) return
 
@@ -179,7 +183,7 @@ export function staty (target = {}) {
       if (value && value[kIsRef]) {
         if (Reflect.set(target, prop, value)) {
           value[kCacheSnapshot].value = null
-          state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
+          state[kSchedule](state, prop, true)
         }
         return true
       }
@@ -188,7 +192,7 @@ export function staty (target = {}) {
         if (oldValue === value || oldValue.__ref === value) return true
         if ((!value || !value[kIsRef]) && Reflect.set(oldValue, '__ref', value)) {
           oldValue[kCacheSnapshot].value = null
-          state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
+          state[kSchedule](state, prop, true)
         }
         return true
       }
@@ -211,7 +215,7 @@ export function staty (target = {}) {
       }
 
       if (Reflect.set(target, prop, value)) {
-        state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
+        state[kSchedule](state, prop, true)
         return true
       }
 
@@ -221,7 +225,7 @@ export function staty (target = {}) {
     deleteProperty (target, prop) {
       if (!(prop in target)) return false
       if (Reflect.deleteProperty(target, prop)) {
-        state[kSchedule](state, prop, { init: true, currentPatch: patches[patches.length - 1] })
+        state[kSchedule](state, prop, true)
         return true
       }
     }
@@ -316,7 +320,7 @@ export function subscribeByProp (state, prop, handler, opts = {}) {
  * @param {(String|Array<String>)} [prop]
  * @returns {Object}
  */
-export const snapshot = (state, prop) => {
+export function snapshot (state, prop) {
   if (Array.isArray(prop)) {
     return prop.map(p => _snapshotProp(state, p))
   }
@@ -335,7 +339,7 @@ export const snapshot = (state, prop) => {
  * @param {(ref: *) => *} [snapshot]
  * @returns {{ __ref: * }}
  */
-export const ref = (value, snapshot) => {
+export function ref (value, snapshot) {
   const obj = { __ref: value }
   Object.defineProperty(obj, kIsRef, { value: true, writable: false, enumerable: false })
   Object.defineProperty(obj, kCacheSnapshot, { value: { value: null }, writable: true, enumerable: false })
@@ -348,9 +352,10 @@ export const ref = (value, snapshot) => {
  * @param {*} state
  * @param {Function} handler
  */
-export const patch = (state, handler, name = '*') => {
-  state[kPatches].push(name)
+export function patch (state, handler, name = '*') {
+  // force to run subscribers
+  state[kProcessBatch]()
   const result = handler(state)
-  state[kPatches].pop()
+  state[kProcessBatch]({ patch: name })
   return result
 }
