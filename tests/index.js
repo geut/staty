@@ -354,4 +354,30 @@ test('delete key', async () => {
   assert.is(calls, 2)
 })
 
+test('unparent', async () => {
+  let calls = 0
+
+  const state = staty({
+    inner: {}
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  subscribeByProp(state, 'inner', () => {
+    calls++
+  })
+
+  state.inner = {}
+
+  await macroTask()
+
+  state.inner.name = 'test'
+
+  await macroTask()
+
+  assert.is(calls, 4)
+})
+
 test.run()

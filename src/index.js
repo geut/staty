@@ -6,43 +6,39 @@ import debug from 'debug'
 import { configureSnapshot } from './snapshot.js'
 
 const log = debug('staty')
-log.log = (...args) => {
-  console.groupCollapsed(...args)
-  console.trace('Trace')
-  console.groupEnd()
-}
+// log.log = (...args) => {
+//   console.groupCollapsed(...args)
+//   console.trace('Trace')
+//   console.groupEnd()
+// }
 
 const kStaty = Symbol('staty')
-const kTarget = Symbol('target')
-const kSubscriptions = Symbol('subscribe')
-const kParent = Symbol('parents')
-const kIsRef = Symbol('isRef')
-const kCacheSnapshot = Symbol('cacheSnapshot')
 const kSchedule = Symbol('schedule')
-const kUnderProp = Symbol('underProp')
 const kProcessBatch = Symbol('processBatch')
 
-const _snapshot = configureSnapshot({ kTarget, kIsRef, kCacheSnapshot })
+const _snapshot = configureSnapshot(kStaty, log)
 
 function _subscribe (state, handler, prop, opts = {}) {
   const { ignore = null } = opts
 
   handler = { run: handler, ignore }
 
+  const subscriptions = state[kStaty].subscriptions
+
   if (prop) {
-    if (!state[kSubscriptions].props.has(prop)) {
-      state[kSubscriptions].props.set(prop, new Set())
+    if (!subscriptions.props.has(prop)) {
+      subscriptions.props.set(prop, new Set())
     }
-    state[kSubscriptions].props.get(prop).add(handler)
+    subscriptions.props.get(prop).add(handler)
   } else {
-    state[kSubscriptions].default.add(handler)
+    subscriptions.default.add(handler)
   }
 
   return () => {
     if (prop) {
-      state[kSubscriptions].props.get(prop).delete(handler)
+      subscriptions.props.get(prop).delete(handler)
     } else {
-      state[kSubscriptions].default.delete(handler)
+      subscriptions.default.delete(handler)
     }
   }
 }
@@ -72,20 +68,22 @@ function _snapshotProp (state, prop) {
  * @returns {Proxy}
  */
 export function staty (target = {}) {
-  const subscriptions = {
-    default: new Set(),
-    props: new Map()
+  const internal = {
+    target,
+    subscriptions: {
+      default: new Set(),
+      props: new Map()
+    },
+    batch: new Set(),
+    parent: null,
+    cacheSnapshot: null,
+    prop: null
   }
-
-  const batch = new Set()
-  const parent = { value: null }
-  const cacheSnapshot = { value: null }
-  let underProp
 
   function processBatch (opts = {}) {
     try {
-      const jobs = Array.from(batch.values())
-      batch.clear()
+      const jobs = Array.from(internal.batch.values())
+      internal.batch.clear()
       jobs.forEach(handlers => {
         handlers.forEach(handler => {
           if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
@@ -98,31 +96,27 @@ export function staty (target = {}) {
   }
 
   function schedule (state, prop, init) {
-    for (const [key, handlers] of state[kSubscriptions].props.entries()) {
-      if (prop.startsWith(key)) {
+    const batch = internal.batch
+    const subscriptions = state[kStaty].subscriptions
+
+    for (const [key, handlers] of subscriptions.props.entries()) {
+      if (prop.startsWith(`${key}.`) || prop === key) {
         batch.add(handlers)
       }
     }
 
-    batch.add(state[kSubscriptions].default)
+    batch.add(subscriptions.default)
 
-    state[kCacheSnapshot].value = null
+    state[kStaty].cacheSnapshot = null
 
-    const parent = state[kParent]
-    if (parent.value && !batch.has(parent.value)) {
-      schedule(parent.value, `${state[kUnderProp]}.${prop}`, { batch })
+    const parent = state[kStaty].parent
+    if (parent && !batch.has(parent)) {
+      schedule(parent, `${state[kStaty].prop}.${prop}`)
     }
 
     if (init) {
-      if (log.enabled) {
-        log(`schedule${':' + prop} %O`, {
-          state: snapshot(state),
-          prop,
-          subscriptionProps: Array.from(subscriptions.props.keys())
-        })
-      }
-
       queueMicrotask(() => {
+        if (log.enabled) log('run %s %O', prop, snapshot(state))
         processBatch(batch)
       })
     }
@@ -130,18 +124,13 @@ export function staty (target = {}) {
 
   const state = new Proxy(target, {
     get (target, prop) {
-      if (prop === kStaty) return true
-      if (prop === kTarget) return target
-      if (prop === kSubscriptions) return subscriptions
-      if (prop === kParent) return parent
-      if (prop === kCacheSnapshot) return cacheSnapshot
-      if (prop === kUnderProp) return underProp
+      if (prop === kStaty) return internal
       if (prop === kProcessBatch) {
-        if (parent.value) return parent.value[kProcessBatch]
+        if (internal.parent) return internal.parent[kProcessBatch]
         return processBatch
       }
       if (prop === kSchedule) {
-        if (parent.value) return parent.value[kSchedule]
+        if (internal.parent) return internal.parent[kSchedule]
         return schedule
       }
 
@@ -151,23 +140,26 @@ export function staty (target = {}) {
 
       if (value === null || value === undefined) return value
 
+      const internalStaty = value?.[kStaty]
+
       // ref
-      if (value[kIsRef]) return value.__ref
+      if (internalStaty?.isRef) {
+        internalStaty.prop = prop
+        return value.__ref
+      }
 
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
-        let parent = value[kParent]
+        const parent = internalStaty?.parent
 
-        if (parent && parent.value && parent.value !== state) throw new Error('A staty object cannot have multiple parents')
+        if (parent && parent !== state) throw new Error('A staty object cannot have multiple parents')
 
         if (!parent) {
           value = staty(value)
-          value[kUnderProp] = prop
+          value[kStaty].prop = prop
+          value[kStaty].parent = state
           Reflect.set(target, prop, value)
-          parent = value[kParent]
         }
-
-        parent.value = state
 
         return value
       }
@@ -175,26 +167,22 @@ export function staty (target = {}) {
       return value
     },
     set (target, prop, value) {
-      if (prop === kUnderProp) {
-        underProp = value
-        return true
-      }
-
       const oldValue = Reflect.get(target, prop)
 
       // start ref support
-      if (value && value[kIsRef]) {
+      if (value && value?.[kStaty]?.isRef) {
         if (Reflect.set(target, prop, value)) {
-          value[kCacheSnapshot].value = null
+          value[kStaty].cacheSnapshot = null
+          value[kStaty].prop = prop
           state[kSchedule](state, prop, true)
         }
         return true
       }
 
-      if (oldValue && oldValue[kIsRef]) {
+      if (oldValue && oldValue?.[kStaty]?.isRef) {
         if (oldValue === value || oldValue.__ref === value) return true
-        if ((!value || !value[kIsRef]) && Reflect.set(oldValue, '__ref', value)) {
-          oldValue[kCacheSnapshot].value = null
+        if ((!value || !value?.[kStaty]?.isRef) && Reflect.set(oldValue, '__ref', value)) {
+          oldValue[kStaty].cacheSnapshot = null
           state[kSchedule](state, prop, true)
         }
         return true
@@ -204,17 +192,18 @@ export function staty (target = {}) {
 
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
-        let parent = value[kParent]
-
-        if (parent && parent.value && parent.value !== state) throw new Error('A staty object cannot have multiple parents')
+        const parent = value?.[kStaty]?.parent
+        if (parent && parent !== state) throw new Error('A staty object cannot have multiple parents')
 
         if (!parent) {
           value = staty(value)
-          value[kUnderProp] = prop
-          parent = value[kParent]
+          value[kStaty].prop = prop
+          value[kStaty].parent = state
         }
+      }
 
-        parent.value = state
+      if (oldValue?.[kStaty]) {
+        oldValue[kStaty].parent = null
       }
 
       if (Reflect.set(target, prop, value)) {
@@ -244,14 +233,16 @@ export function staty (target = {}) {
  * @returns {{ listeners: { default: Number, props: Object }, count }}
  */
 export function listeners (state) {
-  if (!state[kSubscriptions]) throw new Error('state is not valid')
+  if (!state[kStaty]) throw new Error('state is not valid')
+
+  const subscriptions = state[kStaty].subscriptions
 
   const result = {
-    '*': state[kSubscriptions].default.size
+    '*': subscriptions.default.size
   }
 
-  let count = state[kSubscriptions].default.size
-  state[kSubscriptions].props.forEach((listeners, prop) => {
+  let count = subscriptions.default.size
+  subscriptions.props.forEach((listeners, prop) => {
     count += listeners.size
     result[prop] = listeners.size
   })
@@ -259,7 +250,7 @@ export function listeners (state) {
   for (const prop in state) {
     if (!state[prop]) continue
 
-    if (state[prop][kSubscriptions]) {
+    if (state[prop][kStaty]) {
       const value = listeners(state[prop])
       result[prop] = value.listeners
       count += value.count
@@ -339,14 +330,21 @@ export function snapshot (state, prop) {
  * Add a ref to another object
  *
  * @param {*} value
- * @param {(ref: *) => *} [snapshot]
+ * @param {(ref: *) => *} [mapSnapshot]
  * @returns {{ __ref: * }}
  */
-export function ref (value, snapshot) {
+export function ref (value, mapSnapshot) {
   const obj = { __ref: value }
-  Object.defineProperty(obj, kIsRef, { value: true, writable: false, enumerable: false })
-  Object.defineProperty(obj, kCacheSnapshot, { value: { value: null }, writable: true, enumerable: false })
-  Object.defineProperty(obj, 'snapshot', { value: snapshot, writable: false, enumerable: false })
+  Object.defineProperty(obj, kStaty, {
+    value: {
+      isRef: true,
+      cacheSnapshot: null,
+      mapSnapshot,
+      prop: null
+    },
+    writable: true,
+    enumerable: false
+  })
   return obj
 }
 

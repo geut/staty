@@ -1,20 +1,21 @@
 // based on https://github.com/lukeed/klona
 
-export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
+export const configureSnapshot = (kStaty, log) => {
   return function snapshot (x) {
     if (!x) return x
 
-    const cacheSnapshot = x[kCacheSnapshot]
-    if (cacheSnapshot && cacheSnapshot.value) return cacheSnapshot.value
+    const staty = x?.[kStaty]
+    if (staty && staty.cacheSnapshot) return staty.cacheSnapshot
 
-    x = x[kTarget] || x
+    x = staty?.target || x
 
     if (!x || typeof x !== 'object') return x
 
-    if (x[kIsRef]) {
-      if (x.snapshot) {
-        x = x.snapshot(x.__ref)
-        if (cacheSnapshot) cacheSnapshot.value = x
+    if (staty?.isRef) {
+      if (staty.mapSnapshot) {
+        x = staty.mapSnapshot(x.__ref)
+        staty.cacheSnapshot = x
+        if (log.enabled) log('cacheSnapshot:ref %s %O', staty?.prop, x)
         return x
       }
       x = x.__ref
@@ -38,7 +39,10 @@ export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
           tmp[k] = snapshot(x[k])
         }
       }
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
@@ -47,7 +51,10 @@ export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
       for (tmp = Array(k); k--;) {
         tmp[k] = snapshot(x[k])
       }
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
@@ -56,7 +63,10 @@ export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
       x.forEach(function (val) {
         tmp.add(snapshot(val))
       })
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
@@ -65,38 +75,56 @@ export const configureSnapshot = ({ kTarget, kIsRef, kCacheSnapshot }) => {
       x.forEach(function (val, key) {
         tmp.set(snapshot(key), snapshot(val))
       })
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
     if (str === '[object Date]') {
       tmp = new Date(+x)
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
     if (str === '[object RegExp]') {
       tmp = new RegExp(x.source, x.flags)
       tmp.lastIndex = x.lastIndex
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
     if (str === '[object DataView]') {
       tmp = new x.constructor(snapshot(x.buffer))
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
     if (str === '[object ArrayBuffer]') {
       tmp = x.slice(0)
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
     if (str.slice(-6) === 'Array]') {
       tmp = new x.constructor(x)
-      if (cacheSnapshot) cacheSnapshot.value = tmp
+      if (staty) {
+        staty.cacheSnapshot = tmp
+        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+      }
       return tmp
     }
 
