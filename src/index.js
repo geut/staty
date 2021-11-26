@@ -1,6 +1,5 @@
 // inspired by: https://github.com/pmndrs/valtio
 
-import delve from 'dlv'
 import debug from 'debug'
 
 import { configureSnapshot } from './snapshot.js'
@@ -38,8 +37,26 @@ function _subscribe (state, handler, prop, opts = {}) {
   }
 }
 
+function _dlv (obj, key) {
+  let p
+  key = key.split ? key.split('.') : key
+  for (p = 0; p < key.length; p++) {
+    if (obj) {
+      const k = key[p]
+      if (obj?.[kStaty]?.refValue) {
+        obj = obj[kStaty].refValue(k)
+      } else {
+        obj = obj[k]
+      }
+    } else {
+      return obj
+    }
+  }
+  return obj
+}
+
 function _snapshotProp (state, prop) {
-  const value = delve(state, prop)
+  const value = _dlv(state, prop)
 
   if (!value || typeof value !== 'object') {
     return value
@@ -49,7 +66,7 @@ function _snapshotProp (state, prop) {
     return _snapshot(value)
   }
 
-  return delve(_snapshot(state), prop)
+  return _dlv(_snapshot(state), prop)
 }
 
 /**
@@ -212,11 +229,11 @@ export function staty (target = {}) {
         }
       }
 
-      if (oldValue?.[kStaty]) {
-        oldValue[kStaty].parent = null
-      }
-
       if (Reflect.set(target, prop, value)) {
+        if (oldValue?.[kStaty]) {
+          oldValue[kStaty].parent = null
+        }
+
         state[kSchedule](state, prop, true)
         return true
       }
