@@ -6,7 +6,6 @@ export const configureSnapshot = ({ kStaty, log }) => {
 
     const staty = x?.[kStaty]
     if (staty && staty.cacheSnapshot) {
-      console.log('use cache')
       log('cacheSnapshot:use %s %O', staty?.prop, staty.cacheSnapshot)
       return staty.cacheSnapshot
     }
