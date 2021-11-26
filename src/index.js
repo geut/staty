@@ -414,6 +414,7 @@ export function active (state) {
 export function inactive (state) {
   const controller = state?.[kController]
   if (!controller) throw new Error('invalid state')
+  if (controller.actives === 0) return
   controller.actives--
   if (controller.actives === 0) {
     controller.processBatch()
