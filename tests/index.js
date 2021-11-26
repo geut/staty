@@ -131,7 +131,8 @@ test('recursive updates', async () => {
 
 test('cache snapshot', async () => {
   const state = staty({
-    val: 0
+    val: 0,
+    inner: {}
   })
 
   const snap = snapshot(state)
@@ -141,6 +142,7 @@ test('cache snapshot', async () => {
 
   const snap2 = snapshot(state)
   assert.is.not(snap, snap2)
+  assert.is(snap.inner, snap2.inner)
   assert.is(snap2, snapshot(state))
 })
 

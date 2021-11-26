@@ -6,17 +6,12 @@ import debug from 'debug'
 import { configureSnapshot } from './snapshot.js'
 
 const log = debug('staty')
-// log.log = (...args) => {
-//   console.groupCollapsed(...args)
-//   console.trace('Trace')
-//   console.groupEnd()
-// }
 
 const kStaty = Symbol('staty')
 const kSchedule = Symbol('schedule')
 const kProcessBatch = Symbol('processBatch')
 
-const _snapshot = configureSnapshot(kStaty, log)
+const _snapshot = configureSnapshot({ kStaty, log })
 
 function _subscribe (state, handler, prop, opts = {}) {
   const { ignore = null } = opts
@@ -54,36 +49,41 @@ function _snapshotProp (state, prop) {
     return _snapshot(value)
   }
 
-  return _snapshot(state)[prop]
+  return delve(_snapshot(state), prop)
 }
 
 /**
  * @callback UnsubscribeFunction
  */
 
-/**
- * Creates a new proxy-state
- *
- * @param {*} target
- * @returns {Proxy}
- */
-export function staty (target = {}) {
-  const internal = {
-    target,
-    subscriptions: {
+class InternalStaty {
+  constructor (target) {
+    this.target = target
+    this.subscriptions = {
       default: new Set(),
       props: new Map()
-    },
-    batch: new Set(),
-    parent: null,
-    cacheSnapshot: null,
-    prop: null
+    }
+    this.batch = new Set()
+    this.parent = null
+    this.cacheSnapshot = null
+    this.prop = null
+    this.refValue = this.refValue.bind(this)
+    this.processBatch = this.processBatch.bind(this)
+    this.schedule = this.schedule.bind(this)
   }
 
-  function processBatch (opts = {}) {
+  refValue (prop) {
+    if (this.target?.[prop]?.[kStaty]?.isRef) {
+      return this.target?.[prop]
+    }
+
+    return this.proxy[prop]
+  }
+
+  processBatch (opts = {}) {
     try {
-      const jobs = Array.from(internal.batch.values())
-      internal.batch.clear()
+      const jobs = Array.from(this.batch.values())
+      this.batch.clear()
       jobs.forEach(handlers => {
         handlers.forEach(handler => {
           if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
@@ -95,8 +95,8 @@ export function staty (target = {}) {
     }
   }
 
-  function schedule (state, prop, init) {
-    const batch = internal.batch
+  schedule (state, prop, init) {
+    const batch = this.batch
     const subscriptions = state[kStaty].subscriptions
 
     for (const [key, handlers] of subscriptions.props.entries()) {
@@ -111,27 +111,36 @@ export function staty (target = {}) {
 
     const parent = state[kStaty].parent
     if (parent && !batch.has(parent)) {
-      schedule(parent, `${state[kStaty].prop}.${prop}`)
+      this.schedule(parent, `${state[kStaty].prop}.${prop}`)
     }
 
     if (init) {
       queueMicrotask(() => {
         if (log.enabled) log('run %s %O', prop, snapshot(state))
-        processBatch(batch)
+        this.processBatch(batch)
       })
     }
   }
+}
+/**
+ * Creates a new proxy-state
+ *
+ * @param {*} target
+ * @returns {Proxy}
+ */
+export function staty (target = {}) {
+  const internal = new InternalStaty(target)
 
   const state = new Proxy(target, {
     get (target, prop) {
       if (prop === kStaty) return internal
       if (prop === kProcessBatch) {
         if (internal.parent) return internal.parent[kProcessBatch]
-        return processBatch
+        return internal.processBatch
       }
       if (prop === kSchedule) {
         if (internal.parent) return internal.parent[kSchedule]
-        return schedule
+        return internal.schedule
       }
 
       if (!(Reflect.has(target, prop))) return
@@ -144,8 +153,7 @@ export function staty (target = {}) {
 
       // ref
       if (internalStaty?.isRef) {
-        internalStaty.prop = prop
-        return value.__ref
+        return internalStaty.value
       }
 
       const type = Object.prototype.toString.call(value)
@@ -170,23 +178,25 @@ export function staty (target = {}) {
       const oldValue = Reflect.get(target, prop)
 
       // start ref support
-      if (value && value?.[kStaty]?.isRef) {
-        if (Reflect.set(target, prop, value)) {
-          value[kStaty].cacheSnapshot = null
-          value[kStaty].prop = prop
+      if (oldValue && oldValue?.[kStaty]?.isRef) {
+        const ref = oldValue?.[kStaty]
+        if (oldValue === value || ref.value === value) return true
+        if ((!value || !value?.[kStaty]?.isRef)) {
+          ref.value = value
+          ref.cacheSnapshot = null
           state[kSchedule](state, prop, true)
         }
         return true
       }
 
-      if (oldValue && oldValue?.[kStaty]?.isRef) {
-        if (oldValue === value || oldValue.__ref === value) return true
-        if ((!value || !value?.[kStaty]?.isRef) && Reflect.set(oldValue, '__ref', value)) {
-          oldValue[kStaty].cacheSnapshot = null
+      if (value && value?.[kStaty]?.isRef) {
+        if (Reflect.set(target, prop, value)) {
+          value[kStaty].cacheSnapshot = null
           state[kSchedule](state, prop, true)
         }
         return true
       }
+      // end ref support
 
       if (oldValue === value) return true
 
@@ -222,6 +232,8 @@ export function staty (target = {}) {
       }
     }
   })
+
+  internal.proxy = state
 
   return state
 }
@@ -334,16 +346,17 @@ export function snapshot (state, prop) {
  * @returns {{ __ref: * }}
  */
 export function ref (value, mapSnapshot) {
-  const obj = { __ref: value }
-  Object.defineProperty(obj, kStaty, {
-    value: {
-      isRef: true,
-      cacheSnapshot: null,
-      mapSnapshot,
-      prop: null
-    },
-    writable: true,
-    enumerable: false
+  const internal = {
+    isRef: true,
+    cacheSnapshot: null,
+    mapSnapshot,
+    value
+  }
+  const obj = new Proxy({}, {
+    get (_, prop) {
+      if (prop === kStaty) return internal
+      return internal.value[prop]
+    }
   })
   return obj
 }

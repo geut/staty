@@ -1,24 +1,23 @@
 // based on https://github.com/lukeed/klona
 
-export const configureSnapshot = (kStaty, log) => {
+export const configureSnapshot = ({ kStaty, log }) => {
   return function snapshot (x) {
     if (!x) return x
 
     const staty = x?.[kStaty]
-    if (staty && staty.cacheSnapshot) return staty.cacheSnapshot
-
-    x = staty?.target || x
-
-    if (!x || typeof x !== 'object') return x
+    if (staty && staty.cacheSnapshot) {
+      log('cacheSnapshot:use %s %O', staty?.prop, staty.cacheSnapshot)
+      return staty.cacheSnapshot
+    }
 
     if (staty?.isRef) {
       if (staty.mapSnapshot) {
-        x = staty.mapSnapshot(x.__ref)
+        x = staty.mapSnapshot(staty.value)
         staty.cacheSnapshot = x
-        if (log.enabled) log('cacheSnapshot:ref %s %O', staty?.prop, x)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, x)
         return x
       }
-      x = x.__ref
+      x = staty.value
     }
 
     let k
@@ -30,30 +29,32 @@ export const configureSnapshot = (kStaty, log) => {
       for (k in x) {
         if (k === '__proto__') {
           Object.defineProperty(tmp, k, {
-            value: snapshot(x[k]),
+            value: snapshot(staty?.refValue ? staty.refValue(k) : x[k]),
             configurable: true,
             enumerable: true,
             writable: true
           })
         } else {
-          tmp[k] = snapshot(x[k])
+          tmp[k] = snapshot(staty?.refValue ? staty.refValue(k) : x[k])
         }
       }
+
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
+
       return tmp
     }
 
     if (str === '[object Array]') {
       k = x.length
       for (tmp = Array(k); k--;) {
-        tmp[k] = snapshot(x[k])
+        tmp[k] = snapshot(staty?.refValue ? staty.refValue(k) : x[k])
       }
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -65,7 +66,7 @@ export const configureSnapshot = (kStaty, log) => {
       })
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -77,7 +78,7 @@ export const configureSnapshot = (kStaty, log) => {
       })
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -86,7 +87,7 @@ export const configureSnapshot = (kStaty, log) => {
       tmp = new Date(+x)
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -96,7 +97,7 @@ export const configureSnapshot = (kStaty, log) => {
       tmp.lastIndex = x.lastIndex
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -105,7 +106,7 @@ export const configureSnapshot = (kStaty, log) => {
       tmp = new x.constructor(snapshot(x.buffer))
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -114,7 +115,7 @@ export const configureSnapshot = (kStaty, log) => {
       tmp = x.slice(0)
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
@@ -123,7 +124,7 @@ export const configureSnapshot = (kStaty, log) => {
       tmp = new x.constructor(x)
       if (staty) {
         staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot %s %O', staty?.prop, tmp)
+        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
       }
       return tmp
     }
