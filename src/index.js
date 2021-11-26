@@ -9,6 +9,7 @@ const log = debug('staty')
 const kStaty = Symbol('staty')
 const kSchedule = Symbol('schedule')
 const kProcessBatch = Symbol('processBatch')
+const kController = Symbol('controler')
 
 const _snapshot = configureSnapshot({ kStaty, log })
 
@@ -87,6 +88,7 @@ class InternalStaty {
     this.refValue = this.refValue.bind(this)
     this.processBatch = this.processBatch.bind(this)
     this.schedule = this.schedule.bind(this)
+    this.actives = 0
   }
 
   refValue (prop) {
@@ -131,7 +133,7 @@ class InternalStaty {
       this.schedule(parent, `${state[kStaty].prop}.${prop}`)
     }
 
-    if (init) {
+    if (init && this.actives === 0) {
       queueMicrotask(() => {
         if (log.enabled) log('run %s %O', prop, snapshot(state))
         this.processBatch(batch)
@@ -158,6 +160,10 @@ export function staty (target = {}) {
       if (prop === kSchedule) {
         if (internal.parent) return internal.parent[kSchedule]
         return internal.schedule
+      }
+      if (prop === kController) {
+        if (internal.parent) return internal.parent[kController]
+        return internal
       }
 
       if (!(Reflect.has(target, prop))) return
@@ -389,4 +395,27 @@ export function patch (state, handler, name = '*') {
   const result = handler(state)
   state[kProcessBatch]({ patch: name })
   return result
+}
+
+/**
+ * Mark as an active mutation to block the scheduler subscribe until is inactive
+ * @param {*} state
+ */
+export function active (state) {
+  const controller = state?.[kController]
+  if (!controller) throw new Error('invalid state')
+  controller.actives++
+}
+
+/**
+ * Inactive mutation
+ * @param {*} state
+ */
+export function inactive (state) {
+  const controller = state?.[kController]
+  if (!controller) throw new Error('invalid state')
+  controller.actives--
+  if (controller.actives === 0) {
+    controller.processBatch()
+  }
 }

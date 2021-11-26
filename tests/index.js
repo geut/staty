@@ -2,7 +2,7 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
-import { staty, subscribe, subscribeByProp, snapshot, ref, listeners, patch } from '../src/index.js'
+import { staty, subscribe, subscribeByProp, snapshot, ref, listeners, patch, active, inactive } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -380,6 +380,30 @@ test('unparent', async () => {
   await macroTask()
 
   assert.is(calls, 4)
+})
+
+test('actives', async () => {
+  let calls = 0
+
+  const state = staty({
+    inc: 0
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  active(state)
+
+  state.inc++
+
+  await macroTask()
+
+  assert.is(calls, 0)
+
+  inactive(state)
+
+  assert.is(calls, 1)
 })
 
 test.run()
