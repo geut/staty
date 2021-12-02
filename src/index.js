@@ -17,7 +17,7 @@ const _snapshot = configureSnapshot({ kStaty, log })
 function _subscribe (state, handler, prop, opts = {}) {
   const { ignore = null, isAsync = false } = opts
 
-  handler = { run: handler, ignore, isAsync }
+  handler = { run: handler, ignore, isAsync, snapshot: opts.snapshot }
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -104,9 +104,24 @@ class InternalStaty {
 
   async processBatch (opts = {}) {
     try {
-      const batch = Array.from(this.batch.values())
+      const asyncBatch = []
+      const syncBatch = []
+      Array.from(this.batch.values()).forEach(handlers => {
+        Array.from(handlers.values()).forEach(handler => {
+          if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
+          if (handler.isAsync) {
+            asyncBatch.push(() => {
+              return handler.run(handler.snapshot()).catch(err => {
+                console.error(err)
+              })
+            })
+          } else {
+            syncBatch.push(() => handler.run(handler.snapshot()))
+          }
+        })
+      })
       this.batch.clear()
-      const job = this.queue.push({ batch, opts }).finally(() => {
+      const job = this.queue.push({ asyncBatch, syncBatch }).finally(() => {
         this.jobs.delete(job)
       })
       this.jobs.add(job)
@@ -148,21 +163,9 @@ class InternalStaty {
     return Promise.all(Array.from(this.jobs.values()))
   }
 
-  async _processBatch ({ batch, opts = {} }) {
-    const sync = []
-    await Promise.all(Array.from(batch.values()).map(async handlers => {
-      await Promise.all(Array.from(handlers.values()).map(async (handler) => {
-        if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
-        if (handler.isAsync) {
-          return handler.run().catch(err => {
-            console.error(err)
-          })
-        } else {
-          sync.push(handler)
-        }
-      }))
-    }))
-    sync.forEach(handler => handler.run())
+  async _processBatch ({ asyncBatch, syncBatch }) {
+    await Promise.all(asyncBatch.map(handler => handler()))
+    syncBatch.forEach(handler => handler())
   }
 }
 /**
@@ -329,7 +332,11 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  return _subscribe(state, handler, null, { isAsync: handler[Symbol.toStringTag] === 'AsyncFunction', ...opts })
+  return _subscribe(state, handler, null, {
+    isAsync: handler[Symbol.toStringTag] === 'AsyncFunction',
+    snapshot: () => snapshot(state),
+    ...opts
+  })
 }
 
 /**
@@ -344,22 +351,23 @@ export function subscribe (state, handler, opts = {}) {
 export function subscribeByProp (state, prop, handler, opts = {}) {
   opts = { isAsync: handler[Symbol.toStringTag] === 'AsyncFunction', ...opts }
 
+  opts.snapshot = () => snapshot(state, prop)
+
   if (!Array.isArray(prop)) {
-    return _subscribe(state, () => {
-      return handler(snapshot(state, prop))
+    return _subscribe(state, snapshot => {
+      return handler(snapshot)
     }, prop, opts)
   }
 
   let scheduled = false
-  const props = prop
   const unsubscribes = prop.map(prop => {
-    return _subscribe(state, () => {
+    return _subscribe(state, (snapshot) => {
       if (!scheduled) {
         scheduled = true
         queueMicrotask(() => {
           scheduled = false
         })
-        return handler(snapshot(state, props))
+        return handler(snapshot)
       }
     }, prop, opts)
   })
