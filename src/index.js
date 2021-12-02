@@ -1,6 +1,7 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 import debug from 'debug'
+import { promise as fastq } from 'fastq'
 
 import { configureSnapshot } from './snapshot.js'
 
@@ -14,9 +15,9 @@ const kController = Symbol('controler')
 const _snapshot = configureSnapshot({ kStaty, log })
 
 function _subscribe (state, handler, prop, opts = {}) {
-  const { ignore = null } = opts
+  const { ignore = null, isAsync = handler[Symbol.toStringTag] } = opts
 
-  handler = { run: handler, ignore }
+  handler = { run: handler, ignore, isAsync }
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -89,6 +90,8 @@ class InternalStaty {
     this.processBatch = this.processBatch.bind(this)
     this.schedule = this.schedule.bind(this)
     this.actives = 0
+    this.queue = fastq(this._processBatch.bind(this), 1)
+    this.jobs = new Set()
   }
 
   refValue (prop) {
@@ -99,16 +102,15 @@ class InternalStaty {
     return this.proxy[prop]
   }
 
-  processBatch (opts = {}) {
+  async processBatch (opts = {}) {
     try {
-      const jobs = Array.from(this.batch.values())
+      const batch = Array.from(this.batch.values())
       this.batch.clear()
-      jobs.forEach(handlers => {
-        handlers.forEach(handler => {
-          if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
-          handler.run()
-        })
+      const job = this.queue.push({ batch, opts }).finally(() => {
+        this.jobs.delete(job)
       })
+      this.jobs.add(job)
+      return job
     } catch (err) {
       console.error(err)
     }
@@ -136,9 +138,31 @@ class InternalStaty {
     if (init && this.actives === 0) {
       queueMicrotask(() => {
         if (log.enabled) log('run %s %O', prop, snapshot(state))
-        this.processBatch(batch)
+        this.processBatch()
       })
     }
+  }
+
+  async drained () {
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return Promise.all(Array.from(this.jobs.values()))
+  }
+
+  async _processBatch ({ batch, opts = {} }) {
+    const sync = []
+    await Promise.all(Array.from(batch.values()).map(async handlers => {
+      await Promise.all(Array.from(handlers.values()).map(async (handler) => {
+        if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
+        if (handler.isAsync) {
+          return handler.run().catch(err => {
+            console.error(err)
+          })
+        } else {
+          sync.push(handler)
+        }
+      }))
+    }))
+    sync.forEach(handler => handler.run())
   }
 }
 /**
@@ -388,12 +412,13 @@ export function ref (value, mapSnapshot) {
  * Change values of the state
  * @param {*} state
  * @param {Function} handler
+ * @returns {Promise<*>}
  */
-export function patch (state, handler, name = '*') {
+export async function patch (state, handler, name = '*') {
   // force to run subscribers
-  state[kProcessBatch]()
+  await state[kProcessBatch]()
   const result = handler(state)
-  state[kProcessBatch]({ patch: name })
+  await state[kProcessBatch]({ patch: name })
   return result
 }
 
@@ -410,13 +435,36 @@ export function active (state) {
 /**
  * Inactive mutation
  * @param {*} state
+ * @returns {Promise}
  */
-export function inactive (state) {
+export async function inactive (state) {
   const controller = state?.[kController]
   if (!controller) throw new Error('invalid state')
   if (controller.actives === 0) return
   controller.actives--
   if (controller.actives === 0) {
-    controller.processBatch()
+    await controller.processBatch()
   }
+}
+
+/**
+ * Force update
+ * @param {*} state
+ * @returns {Promise}
+ */
+export async function forceUpdate (state) {
+  const controller = state?.[kController]
+  if (!controller) throw new Error('invalid state')
+  await controller.processBatch()
+}
+
+/**
+ * Wait for the state be drained
+ * @param {*} state
+ * @returns {Promise}
+ */
+export async function drained (state) {
+  const controller = state?.[kController]
+  if (!controller) throw new Error('invalid state')
+  return controller.drained()
 }

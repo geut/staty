@@ -2,7 +2,7 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
-import { staty, subscribe, subscribeByProp, snapshot, ref, listeners, patch, active, inactive } from '../src/index.js'
+import { staty, subscribe, subscribeByProp, snapshot, ref, listeners, patch, active, inactive, drained } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -49,7 +49,7 @@ test('subscription', async () => {
   state.inner.val = 'change'
   state.arr[2].val = 'change'
 
-  await macroTask()
+  await drained(state)
 
   assert.equal(calls, {
     root: 1,
@@ -120,7 +120,7 @@ test('recursive updates', async () => {
 
   state.val = 1
 
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 2)
   assert.equal(snapshots, [
@@ -165,15 +165,15 @@ test('subscribeByProp arrays', async () => {
   state.num0++
   state.num1++
 
-  await macroTask()
+  await drained(state)
   assert.is(calls, 1)
 
   state.arr.push(0)
-  await macroTask()
+  await drained(state)
   assert.is(calls, 2)
 
   state.num2 = 1
-  await macroTask()
+  await drained(state)
   assert.is(calls, 2)
 })
 
@@ -189,10 +189,10 @@ test('array push/splice', async () => {
   })
 
   state.arr.push('val')
-  await macroTask()
+  await drained(state)
 
   state.arr.splice(0, 1)
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 2)
 })
@@ -209,7 +209,7 @@ test('subscribe missing prop', async () => {
   })
 
   state.metadata.missing = 'change'
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 1)
 })
@@ -253,11 +253,11 @@ test('compare references', async () => {
 
   state.val = {}
 
-  await macroTask()
+  await drained(state)
 
   state.num = 1
 
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 1)
 })
@@ -300,7 +300,7 @@ test('unsubscribe', async () => {
   state.prop0 = 1
   state.prop1.prop2 = 1
   state.prop1.prop3[0].prop4 = 1
-  await macroTask()
+  await drained(state)
   assert.is(calls, 5)
 
   unsubscribe.forEach(unsubscribe => unsubscribe())
@@ -322,11 +322,9 @@ test('patches', async () => {
     calls++
   }, { ignore: /\*/ })
 
-  patch(state, state => {
+  await patch(state, state => {
     state.prop0++
   })
-
-  await macroTask()
 
   assert.is(calls, 1)
 })
@@ -351,7 +349,7 @@ test('delete key', async () => {
 
   delete state.inner
 
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 2)
 })
@@ -373,11 +371,11 @@ test('unparent', async () => {
 
   state.inner = {}
 
-  await macroTask()
+  await drained(state)
 
   state.inner.name = 'test'
 
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 4)
 })
@@ -397,11 +395,30 @@ test('actives', async () => {
 
   state.inc++
 
-  await macroTask()
+  await drained(state)
 
   assert.is(calls, 0)
 
-  inactive(state)
+  await inactive(state)
+
+  assert.is(calls, 1)
+})
+
+test('async', async () => {
+  let calls = 0
+
+  const state = staty({
+    inc: 0
+  })
+
+  subscribe(state, async () => {
+    await macroTask()
+    calls++
+  })
+
+  state.inc++
+
+  await drained(state)
 
   assert.is(calls, 1)
 })
