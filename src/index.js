@@ -15,7 +15,7 @@ const kController = Symbol('controler')
 const _snapshot = configureSnapshot({ kStaty, log })
 
 function _subscribe (state, handler, prop, opts = {}) {
-  const { ignore = null, isAsync = handler[Symbol.toStringTag] } = opts
+  const { ignore = null, isAsync = false } = opts
 
   handler = { run: handler, ignore, isAsync }
 
@@ -329,7 +329,7 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  return _subscribe(state, handler, null, opts)
+  return _subscribe(state, handler, null, { isAsync: handler[Symbol.toStringTag] === 'AsyncFunction', ...opts })
 }
 
 /**
@@ -342,9 +342,11 @@ export function subscribe (state, handler, opts = {}) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribeByProp (state, prop, handler, opts = {}) {
+  opts = { isAsync: handler[Symbol.toStringTag] === 'AsyncFunction', ...opts }
+
   if (!Array.isArray(prop)) {
     return _subscribe(state, () => {
-      handler(snapshot(state, prop))
+      return handler(snapshot(state, prop))
     }, prop, opts)
   }
 
@@ -354,11 +356,10 @@ export function subscribeByProp (state, prop, handler, opts = {}) {
     return _subscribe(state, () => {
       if (!scheduled) {
         scheduled = true
-        handler(snapshot(state, props))
-
         queueMicrotask(() => {
           scheduled = false
         })
+        return handler(snapshot(state, props))
       }
     }, prop, opts)
   })
