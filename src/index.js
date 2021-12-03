@@ -110,17 +110,14 @@ class InternalStaty {
         Array.from(handlers.values()).forEach(handler => {
           if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
           if (handler.isAsync) {
-            asyncBatch.push(() => {
-              return handler.run(handler.snapshot()).catch(err => {
-                console.error(err)
-              })
-            })
+            asyncBatch.push({ run: handler.run, snapshot: handler.snapshot() })
           } else {
-            syncBatch.push(() => handler.run(handler.snapshot()))
+            syncBatch.push({ run: handler.run, snapshot: handler.snapshot() })
           }
         })
       })
       this.batch.clear()
+      if (asyncBatch.length === 0 && syncBatch.length === 0) return
       const job = this.queue.push({ asyncBatch, syncBatch }).finally(() => {
         this.jobs.delete(job)
       })
@@ -164,8 +161,14 @@ class InternalStaty {
   }
 
   async _processBatch ({ asyncBatch, syncBatch }) {
-    await Promise.all(asyncBatch.map(handler => handler()))
-    syncBatch.forEach(handler => handler())
+    await Promise.all(asyncBatch.map(handler => handler.run(handler.snapshot).catch(err => console.error(err))))
+    syncBatch.forEach(handler => {
+      try {
+        handler.run(handler.snapshot)
+      } catch (err) {
+        console.error(err)
+      }
+    })
   }
 }
 /**
