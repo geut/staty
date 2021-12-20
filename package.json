@@ -18,8 +18,6 @@
   },
   "dependencies": {
     "debug": "^4.3.2",
-    "dequal": "^2.0.2",
-    "dlv": "^1.1.3",
     "fastq": "^1.13.0"
   },
   "devDependencies": {

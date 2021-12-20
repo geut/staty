@@ -103,6 +103,8 @@ class InternalStaty {
   }
 
   async processBatch (opts = {}) {
+    if (this.batch.size === 0) return
+
     try {
       const asyncBatch = []
       const syncBatch = []
@@ -129,8 +131,9 @@ class InternalStaty {
   }
 
   schedule (state, prop, init) {
+    const internal = state[kStaty]
     const batch = this.batch
-    const subscriptions = state[kStaty].subscriptions
+    const subscriptions = internal.subscriptions
 
     for (const [key, handlers] of subscriptions.props.entries()) {
       if (prop.startsWith(`${key}.`) || prop === key) {
@@ -140,17 +143,19 @@ class InternalStaty {
 
     batch.add(subscriptions.default)
 
-    state[kStaty].cacheSnapshot = null
+    internal.cacheSnapshot = null
 
-    const parent = state[kStaty].parent
+    const parent = internal.parent
     if (parent && !batch.has(parent)) {
-      this.schedule(parent, `${state[kStaty].prop}.${prop}`)
+      this.schedule(parent, `${internal.prop}.${prop}`)
     }
 
     if (init && this.actives === 0) {
+      this.actives++
       queueMicrotask(() => {
         if (log.enabled) log('run %s %O', prop, snapshot(state))
         this.processBatch()
+        if (this.actives > 0) this.actives--
       })
     }
   }
