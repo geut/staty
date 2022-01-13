@@ -422,4 +422,19 @@ test('readme', () => {
   assert.is(plan, 0)
 })
 
+test('no snapshot', () => {
+  let plan = 1
+  const state = staty({
+    count: 0
+  })
+
+  subscribe(state, state => {
+    assert.is(state, undefined)
+    plan--
+  }, { snapshot: false })
+
+  state.count++
+  assert.is(plan, 0)
+})
+
 test.run()
