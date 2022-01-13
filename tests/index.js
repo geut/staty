@@ -2,7 +2,7 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
-import { staty, subscribe, subscribeByProp, snapshot, ref, listeners, patch, active, inactive, drained } from '../src/index.js'
+import { staty, subscribe, snapshot, ref, listeners, transaction } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -18,6 +18,7 @@ test('subscription', async () => {
 
   const calls = {
     root: 0,
+    rootBatched: 0,
     arr: 0,
     inner: 0,
     'arr.val': 0,
@@ -28,31 +29,40 @@ test('subscription', async () => {
     calls.root++
   })
 
+  subscribe(state, () => {
+    calls.rootBatched++
+  }, { batch: true })
+
   subscribe(state.inner, () => {
     calls.inner++
   })
 
-  subscribeByProp(state.inner, 'val', (val) => {
+  subscribe(state.inner, (val) => {
     calls['inner.val']++
     assert.is(val, 'change')
+  }, {
+    filter: 'val'
   })
 
   subscribe(state.arr, () => {
     calls.arr++
   })
 
-  subscribeByProp(state.arr[2], 'val', (val) => {
+  subscribe(state.arr[2], (val) => {
     calls['arr.val']++
     assert.is(val, 'change')
+  }, {
+    filter: 'val'
   })
 
   state.inner.val = 'change'
   state.arr[2].val = 'change'
 
-  await drained(state)
+  await macroTask()
 
   assert.equal(calls, {
-    root: 1,
+    root: 2,
+    rootBatched: 1,
     arr: 1,
     inner: 1,
     'arr.val': 1,
@@ -104,7 +114,7 @@ test('ref', () => {
   })
 })
 
-test('recursive updates', async () => {
+test('recursive updates', () => {
   let calls = 0
   const snapshots = []
 
@@ -112,24 +122,23 @@ test('recursive updates', async () => {
     val: 0
   })
 
+  snapshots.push(snapshot(state))
+
   subscribe(state, () => {
     calls++
     snapshots.push(snapshot(state))
-    state.val = 2
+    if (state.val < 10) {
+      state.val++
+    }
   })
 
-  state.val = 1
+  state.val++
 
-  await drained(state)
-
-  assert.is(calls, 2)
-  assert.equal(snapshots, [
-    { val: 1 },
-    { val: 2 }
-  ])
+  assert.is(calls, 10)
+  assert.equal(snapshots, [...Array(11).keys()].map(val => ({ val })))
 })
 
-test('cache snapshot', async () => {
+test('cache snapshot', () => {
   const state = staty({
     val: 0,
     inner: {}
@@ -146,7 +155,7 @@ test('cache snapshot', async () => {
   assert.is(snap2, snapshot(state))
 })
 
-test('subscribeByProp arrays', async () => {
+test('subscribe by prop arrays', () => {
   let calls = 0
 
   const state = staty({
@@ -156,61 +165,60 @@ test('subscribeByProp arrays', async () => {
     arr: []
   })
 
-  subscribeByProp(state, ['num0', 'num1', 'arr'], ([num0, num1]) => {
+  let lastSnapshot
+
+  subscribe(state, (snapshot) => {
     calls++
-    assert.is(num0, 1)
-    assert.is(num1, 1)
+    lastSnapshot = snapshot
+  }, {
+    filter: ['num0', 'num1', 'arr']
   })
 
   state.num0++
   state.num1++
 
-  await drained(state)
-  assert.is(calls, 1)
+  assert.is(calls, 2)
 
   state.arr.push(0)
-  await drained(state)
-  assert.is(calls, 2)
+  assert.is(calls, 3)
 
   state.num2 = 1
-  await drained(state)
-  assert.is(calls, 2)
+  assert.is(calls, 3)
+
+  assert.equal(lastSnapshot, snapshot(state, ['num0', 'num1', 'arr']))
 })
 
-test('array push/splice', async () => {
+test('array push/splice', () => {
   let calls = 0
 
   const state = staty({
     arr: []
   })
 
-  subscribe(state, () => {
+  subscribe(state, (snap) => {
     calls++
   })
 
   state.arr.push('val')
-  await drained(state)
-
   state.arr.splice(0, 1)
-  await drained(state)
 
   assert.is(calls, 2)
 })
 
-test('subscribe missing prop', async () => {
+test('subscribe missing prop', () => {
   let calls = 0
 
   const state = staty({
     metadata: {}
   })
 
-  subscribeByProp(state, 'metadata.missing', () => {
+  subscribe(state, () => {
     calls++
+  }, {
+    filter: 'metadata.missing'
   })
 
   state.metadata.missing = 'change'
-  await drained(state)
-
   assert.is(calls, 1)
 })
 
@@ -237,7 +245,7 @@ test('error by set references as undefined', () => {
   })
 })
 
-test('compare references', async () => {
+test('compare references', () => {
   let calls = 0
 
   const state = staty({
@@ -247,22 +255,18 @@ test('compare references', async () => {
     num: 0
   })
 
-  subscribeByProp(state, 'val', () => {
+  subscribe(state, () => {
     calls++
+  }, {
+    filter: 'val'
   })
 
   state.val = {}
-
-  await drained(state)
-
   state.num = 1
-
-  await drained(state)
-
   assert.is(calls, 1)
 })
 
-test('unsubscribe', async () => {
+test('unsubscribe', () => {
   let calls = 0
 
   const state = staty({
@@ -279,17 +283,17 @@ test('unsubscribe', async () => {
     calls++
   }))
 
-  unsubscribe.push(subscribeByProp(state, 'prop0', () => {
+  unsubscribe.push(subscribe(state, () => {
     calls++
-  }))
+  }, { filter: 'prop0' }))
 
-  unsubscribe.push(subscribeByProp(state, 'prop1.prop2', () => {
+  unsubscribe.push(subscribe(state, () => {
     calls++
-  }))
+  }, { filter: 'prop1.prop2' }))
 
-  unsubscribe.push(subscribeByProp(state, ['prop0', 'prop1.prop2'], () => {
+  unsubscribe.push(subscribe(state, () => {
     calls++
-  }))
+  }, { filter: ['prop0', 'prop1.prop2'] }))
 
   unsubscribe.push(subscribe(state.prop1.prop3[0], () => {
     calls++
@@ -300,36 +304,13 @@ test('unsubscribe', async () => {
   state.prop0 = 1
   state.prop1.prop2 = 1
   state.prop1.prop3[0].prop4 = 1
-  await drained(state)
-  assert.is(calls, 5)
+  assert.is(calls, 8)
 
   unsubscribe.forEach(unsubscribe => unsubscribe())
   assert.is(listeners(state).count, 0)
 })
 
-test('patches', async () => {
-  let calls = 0
-
-  const state = staty({
-    prop0: 0
-  })
-
-  subscribe(state, () => {
-    calls++
-  })
-
-  subscribe(state, () => {
-    calls++
-  }, { ignore: /\*/ })
-
-  await patch(state, state => {
-    state.prop0++
-  })
-
-  assert.is(calls, 1)
-})
-
-test('delete key', async () => {
+test('delete key', () => {
   let calls = 0
 
   const state = staty({
@@ -343,18 +324,16 @@ test('delete key', async () => {
     calls++
   })
 
-  subscribeByProp(state, 'inner', () => {
+  subscribe(state, () => {
     calls++
-  })
+  }, { filter: 'inner' })
 
   delete state.inner
-
-  await drained(state)
 
   assert.is(calls, 2)
 })
 
-test('unparent', async () => {
+test('unparent', () => {
   let calls = 0
 
   const state = staty({
@@ -365,22 +344,16 @@ test('unparent', async () => {
     calls++
   })
 
-  subscribeByProp(state, 'inner', () => {
+  subscribe(state, () => {
     calls++
-  })
+  }, { filter: 'inner' })
 
   state.inner = {}
-
-  await drained(state)
-
   state.inner.name = 'test'
-
-  await drained(state)
-
   assert.is(calls, 4)
 })
 
-test('actives', async () => {
+test('transaction', () => {
   let calls = 0
 
   const state = staty({
@@ -391,36 +364,62 @@ test('actives', async () => {
     calls++
   })
 
-  active(state)
-
-  state.inc++
-
-  await drained(state)
-
-  assert.is(calls, 0)
-
-  await inactive(state)
+  transaction(state, () => {
+    state.inc++
+    state.inc++
+  })
 
   assert.is(calls, 1)
 })
 
-test('async', async () => {
+test('transaction names', () => {
   let calls = 0
 
   const state = staty({
-    inc: 0
+    prop0: 0
   })
 
-  subscribe(state, async () => {
-    await macroTask()
+  subscribe(state, () => {
     calls++
   })
 
-  state.inc++
+  subscribe(state, () => {
+    calls++
+  }, { transactionFilter: /internal/ })
 
-  await drained(state)
+  transaction(state, () => {
+    state.prop0++
+  }, 'internal')
 
   assert.is(calls, 1)
+})
+
+test('readme', () => {
+  let plan = 3
+
+  const state = staty({
+    count: 0
+  })
+
+  assert.equal(snapshot(state), { count: 0 })
+
+  subscribe(state, state => {
+    assert.equal(snapshot(state), { count: 1 })
+    plan--
+  })
+
+  subscribe(state, count => {
+    assert.is(count, 1)
+    plan--
+  }, { filter: 'count' })
+
+  subscribe(state, ([count]) => {
+    assert.is(count, 1)
+    plan--
+  }, { filter: ['count'] })
+
+  state.count++
+  assert.is(plan, 0)
 })
 
 test.run()

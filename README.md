@@ -16,19 +16,26 @@ $ npm install @geut/staty
 ## Usage
 
 ```javascript
-import { staty, subscribe, subscribeByProp, snapshot } from '@geut/staty'
+import { staty, subscribe, snapshot } from '@geut/staty'
 
 const state = staty({
   count: 0
 })
 
-subscribe(state, () => {
-  console.log(snapshot(state)) // { count: 1 }
+console.log(snapshot(state)) // { count: 0 }
+
+subscribe(state, state => {
+  console.log(state) // { count: 1 }
 })
 
-subscribeByProp(state, 'count', () => {
-  console.log(snapshot(state, 'count')) // 1
-})
+subscribe(state, count => {
+  console.log(count) // 1
+}, { filter: 'count' })
+
+// filter multiple values
+subscribe(state, ([count]) => {
+  console.log(count) // 1
+}, { filter: ['count'] })
 
 state.count++
 ```

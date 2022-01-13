@@ -1,23 +1,22 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 import debug from 'debug'
-import { promise as fastq } from 'fastq'
 
 import { configureSnapshot } from './snapshot.js'
 
 const log = debug('staty')
 
 const kStaty = Symbol('staty')
-const kSchedule = Symbol('schedule')
-const kProcessBatch = Symbol('processBatch')
 const kController = Symbol('controler')
+
+const noop = () => {}
 
 const _snapshot = configureSnapshot({ kStaty, log })
 
 function _subscribe (state, handler, prop, opts = {}) {
-  const { ignore = null, isAsync = false } = opts
+  const { snapshot, transactionFilter = null } = opts
 
-  handler = { run: handler, ignore, isAsync, snapshot: opts.snapshot }
+  handler = { run: handler, snapshot, transactionFilter }
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -82,16 +81,20 @@ class InternalStaty {
       default: new Set(),
       props: new Map()
     }
-    this.batch = new Set()
+    this.batches = new Map()
     this.parent = null
     this.cacheSnapshot = null
     this.prop = null
     this.refValue = this.refValue.bind(this)
-    this.processBatch = this.processBatch.bind(this)
-    this.schedule = this.schedule.bind(this)
-    this.actives = 0
-    this.queue = fastq(this._processBatch.bind(this), 1)
-    this.jobs = new Set()
+    this.transactions = []
+  }
+
+  get controller () {
+    let controller = this.parent ? this.parent[kStaty] : this
+    while (controller.parent) {
+      controller = controller.parent[kStaty]
+    }
+    return controller
   }
 
   refValue (prop) {
@@ -102,80 +105,77 @@ class InternalStaty {
     return this.proxy[prop]
   }
 
-  async processBatch (opts = {}) {
-    if (this.batch.size === 0) return
+  run (prop, controller = this.controller) {
+    const subscriptions = this.subscriptions
+    this.cacheSnapshot = null
+
+    const transaction = controller.transactions[controller.transactions.length - 1]
+    const transactionName = transaction ? transaction.name : '*'
+
+    for (const [key, handlers] of subscriptions.props.entries()) {
+      if (prop.startsWith(`${key}.`) || prop === key) {
+        Array.from(handlers.values()).forEach(handler => {
+          if (handler.transactionFilter && handler.transactionFilter.test(transactionName)) return
+          this._run(handler, transaction)
+        })
+      }
+    }
+
+    Array.from(subscriptions.default.values()).forEach(handler => {
+      if (handler.transactionFilter && handler.transactionFilter.test(transactionName)) return
+      this._run(handler, transaction)
+    })
+
+    if (this.parent) {
+      this.parent[kStaty].run(`${this.prop}.${prop}`, controller)
+    }
+  }
+
+  batch (handler, snapshot) {
+    const controller = this.controller
+
+    if (controller.batches.size > 0) {
+      controller.batches.set(handler, snapshot)
+      return
+    }
+
+    controller.batches.set(handler, snapshot)
+
+    queueMicrotask(() => {
+      controller.batches.forEach((snapshot, handler) => {
+        try {
+          handler(snapshot)
+        } catch (err) {
+          console.error(err)
+        }
+      })
+      controller.batches.clear()
+    })
+  }
+
+  createTransaction (name = '*') {
+    const transaction = { handlers: new Set(), name }
+    this.transactions.push(transaction)
+    return () => {
+      this.transactions.pop()
+      transaction.handlers.forEach(handler => this._run(handler))
+    }
+  }
+
+  _run (handler, transaction) {
+    if (transaction) {
+      transaction.handlers.add(handler)
+      return
+    }
 
     try {
-      const asyncBatch = []
-      const syncBatch = []
-      Array.from(this.batch.values()).forEach(handlers => {
-        Array.from(handlers.values()).forEach(handler => {
-          if (opts.patch && handler.ignore && handler.ignore.test(opts.patch)) return
-          if (handler.isAsync) {
-            asyncBatch.push({ run: handler.run, snapshot: handler.snapshot() })
-          } else {
-            syncBatch.push({ run: handler.run, snapshot: handler.snapshot() })
-          }
-        })
-      })
-      this.batch.clear()
-      if (asyncBatch.length === 0 && syncBatch.length === 0) return
-      const job = this.queue.push({ asyncBatch, syncBatch }).finally(() => {
-        this.jobs.delete(job)
-      })
-      this.jobs.add(job)
-      return job
+      handler.run(handler.snapshot())
     } catch (err) {
       console.error(err)
     }
   }
-
-  schedule (state, prop, init) {
-    const internal = state[kStaty]
-    const batch = this.batch
-    const subscriptions = internal.subscriptions
-
-    for (const [key, handlers] of subscriptions.props.entries()) {
-      if (prop.startsWith(`${key}.`) || prop === key) {
-        batch.add(handlers)
-      }
-    }
-
-    batch.add(subscriptions.default)
-
-    internal.cacheSnapshot = null
-
-    const parent = internal.parent
-    if (parent && !batch.has(parent)) {
-      this.schedule(parent, `${internal.prop}.${prop}`)
-    }
-
-    if (init && this.actives === 0) {
-      this.actives++
-      queueMicrotask(() => {
-        if (log.enabled) log('run %s %O', prop, snapshot(state))
-        this.processBatch()
-        if (this.actives > 0) this.actives--
-      })
-    }
-  }
-
-  async drained () {
-    await new Promise(resolve => setTimeout(resolve, 0))
-    return Promise.all(Array.from(this.jobs.values()))
-  }
-
-  async _processBatch ({ asyncBatch, syncBatch }) {
-    await Promise.all(asyncBatch.map(handler => handler.run(handler.snapshot).catch(err => console.error(err))))
-    syncBatch.forEach(handler => {
-      try {
-        handler.run(handler.snapshot)
-      } catch (err) {
-        console.error(err)
-      }
-    })
-  }
 }
+
 /**
  * Creates a new proxy-state
  *
@@ -188,18 +188,7 @@ export function staty (target = {}) {
   const state = new Proxy(target, {
     get (target, prop) {
       if (prop === kStaty) return internal
-      if (prop === kProcessBatch) {
-        if (internal.parent) return internal.parent[kProcessBatch]
-        return internal.processBatch
-      }
-      if (prop === kSchedule) {
-        if (internal.parent) return internal.parent[kSchedule]
-        return internal.schedule
-      }
-      if (prop === kController) {
-        if (internal.parent) return internal.parent[kController]
-        return internal
-      }
+      if (prop === kController) return internal.controller
 
       if (!(Reflect.has(target, prop))) return
 
@@ -242,7 +231,7 @@ export function staty (target = {}) {
         if ((!value || !value?.[kStaty]?.isRef)) {
           ref.value = value
           ref.cacheSnapshot = null
-          state[kSchedule](state, prop, true)
+          state[kStaty].run(prop)
         }
         return true
       }
@@ -250,7 +239,7 @@ export function staty (target = {}) {
       if (value && value?.[kStaty]?.isRef) {
         if (Reflect.set(target, prop, value)) {
           value[kStaty].cacheSnapshot = null
-          state[kSchedule](state, prop, true)
+          state[kStaty].run(prop)
         }
         return true
       }
@@ -275,7 +264,7 @@ export function staty (target = {}) {
           oldValue[kStaty].parent = null
         }
 
-        state[kSchedule](state, prop, true)
+        state[kStaty].run(prop)
         return true
       }
 
@@ -283,9 +272,10 @@ export function staty (target = {}) {
     },
 
     deleteProperty (target, prop) {
+      if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
       if (!(prop in target)) return false
       if (Reflect.deleteProperty(target, prop)) {
-        state[kSchedule](state, prop, true)
+        state[kStaty].run(prop)
         return true
       }
     }
@@ -340,36 +330,35 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  return _subscribe(state, handler, null, {
-    isAsync: handler[Symbol.toStringTag] === 'AsyncFunction',
-    snapshot: () => snapshot(state),
-    ...opts
-  })
-}
+  let { filter: prop, snapshot: userSnapshot, batch = false, transactionFilter } = opts
 
-/**
- * Subscribe for changes in a specific prop of the state
- *
- * @param {Proxy} state
- * @param {(String|Array<String>)} prop
- * @param {function} handler
- * @param {Object} opts
- * @returns {UnsubscribeFunction}
- */
-export function subscribeByProp (state, prop, handler, opts = {}) {
-  opts = { isAsync: handler[Symbol.toStringTag] === 'AsyncFunction', ...opts }
+  userSnapshot = userSnapshot === false ? noop : (userSnapshot || (() => snapshot(state, prop)))
 
-  opts.snapshot = () => snapshot(state, prop)
+  const subscribeProps = {
+    snapshot: userSnapshot,
+    transactionFilter
+  }
+
+  if (batch) {
+    const userHandler = handler
+    handler = (snapshot) => state[kController].batch(userHandler, snapshot)
+  }
+
+  if (!prop) {
+    return _subscribe(state, handler, null, subscribeProps)
+  }
 
   if (!Array.isArray(prop)) {
     return _subscribe(state, snapshot => {
       return handler(snapshot)
-    }, prop, opts)
+    }, prop, subscribeProps)
   }
 
   let scheduled = false
   const unsubscribes = prop.map(prop => {
     return _subscribe(state, (snapshot) => {
+      if (!batch) return handler(snapshot)
+
       if (!scheduled) {
         scheduled = true
         queueMicrotask(() => {
@@ -377,7 +366,7 @@ export function subscribeByProp (state, prop, handler, opts = {}) {
         })
         return handler(snapshot)
       }
-    }, prop, opts)
+    }, prop, subscribeProps)
   })
 
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
@@ -426,62 +415,21 @@ export function ref (value, mapSnapshot) {
 }
 
 /**
- * Change values of the state
- * @param {*} state
- * @param {Function} handler
- * @returns {Promise<*>}
+ * Create a transaction
+ * @param {Proxy} state
+ * @param {function} handler
+ * @param {string} transactionName
  */
-export async function patch (state, handler, name = '*') {
-  // force to run subscribers
-  await state[kProcessBatch]()
-  const result = handler(state)
-  await state[kProcessBatch]({ patch: name })
-  return result
-}
-
-/**
- * Mark as an active mutation to block the scheduler subscribe until is inactive
- * @param {*} state
- */
-export function active (state) {
+export function transaction (state, handler, transactionName) {
   const controller = state?.[kController]
   if (!controller) throw new Error('invalid state')
-  controller.actives++
-}
 
-/**
- * Inactive mutation
- * @param {*} state
- * @returns {Promise}
- */
-export async function inactive (state) {
-  const controller = state?.[kController]
-  if (!controller) throw new Error('invalid state')
-  if (controller.actives === 0) return
-  controller.actives--
-  if (controller.actives === 0) {
-    await controller.processBatch()
+  const release = controller.createTransaction(transactionName)
+  try {
+    handler()
+  } catch (err) {
+    console.error(err)
+  } finally {
+    release()
   }
-}
-
-/**
- * Force update
- * @param {*} state
- * @returns {Promise}
- */
-export async function forceUpdate (state) {
-  const controller = state?.[kController]
-  if (!controller) throw new Error('invalid state')
-  await controller.processBatch()
-}
-
-/**
- * Wait for the state be drained
- * @param {*} state
- * @returns {Promise}
- */
-export async function drained (state) {
-  const controller = state?.[kController]
-  if (!controller) throw new Error('invalid state')
-  return controller.drained()
 }
