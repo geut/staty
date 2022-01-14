@@ -459,7 +459,8 @@ test('batch', async () => {
   const calls = {
     root: 0,
     count: 0,
-    innerCount: 0
+    innerCount: 0,
+    multiple: 0
   }
 
   const state = staty({
@@ -481,6 +482,10 @@ test('batch', async () => {
     calls.innerCount++
   }, { filter: 'inner.count', batch: true })
 
+  subscribe(state, () => {
+    calls.multiple++
+  }, { filter: ['count', 'inner.count'], batch: true })
+
   state.count++
   state.inner.count++
 
@@ -489,6 +494,7 @@ test('batch', async () => {
   assert.is(calls.root, 1)
   assert.is(calls.count, 1)
   assert.is(calls.innerCount, 1)
+  assert.is(calls.multiple, 1)
 })
 
 test.run()
