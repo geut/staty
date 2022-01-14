@@ -437,7 +437,7 @@ test('no snapshot', () => {
   assert.is(plan, 0)
 })
 
-test.only('array splice', () => {
+test('array mutable operations', () => {
   let calls = 0
 
   const state = staty({
@@ -445,13 +445,50 @@ test.only('array splice', () => {
   })
 
   subscribe(state, (state) => {
-    console.log(state)
     calls++
   })
 
   state.arr.splice(0, 1)
+  state.arr.pop()
+  state.arr.shift()
 
-  assert.is(calls, 1)
+  assert.is(calls, 3)
+})
+
+test('batch', async () => {
+  const calls = {
+    root: 0,
+    count: 0,
+    innerCount: 0
+  }
+
+  const state = staty({
+    count: 0,
+    inner: {
+      count: 0
+    }
+  })
+
+  subscribe(state, () => {
+    calls.root++
+  }, { batch: true })
+
+  subscribe(state, () => {
+    calls.count++
+  }, { batch: true })
+
+  subscribe(state, () => {
+    calls.innerCount++
+  }, { filter: 'inner.count', batch: true })
+
+  state.count++
+  state.inner.count++
+
+  await macroTask()
+
+  assert.is(calls.root, 1)
+  assert.is(calls.count, 1)
+  assert.is(calls.innerCount, 1)
 })
 
 test.run()
