@@ -207,9 +207,10 @@ export function staty (target = {}) {
       if (type === '[object Object]' || type === '[object Array]') {
         const parent = internalStaty?.parent
 
-        if (parent && parent !== state) throw new Error('A staty object cannot have multiple parents')
-
-        if (!parent) {
+        if (parent && parent !== state) {
+          internalStaty.prop = prop
+          internalStaty.parent = state
+        } else if (!parent) {
           value = staty(value)
           value[kStaty].prop = prop
           value[kStaty].parent = state
@@ -250,9 +251,11 @@ export function staty (target = {}) {
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
         const parent = value?.[kStaty]?.parent
-        if (parent && parent !== state) throw new Error('A staty object cannot have multiple parents')
 
-        if (!parent) {
+        if (parent && parent !== state) {
+          value[kStaty].prop = prop
+          value[kStaty].parent = state
+        } else if (!parent) {
           value = staty(value)
           value[kStaty].prop = prop
           value[kStaty].parent = state

@@ -188,11 +188,11 @@ test('subscribe by prop arrays', () => {
   assert.equal(lastSnapshot, snapshot(state, ['num0', 'num1', 'arr']))
 })
 
-test('array push/splice', () => {
+test('array push/slice', () => {
   let calls = 0
 
   const state = staty({
-    arr: []
+    arr: [{}]
   })
 
   subscribe(state, (snap) => {
@@ -200,7 +200,7 @@ test('array push/splice', () => {
   })
 
   state.arr.push('val')
-  state.arr.splice(0, 1)
+  state.arr = state.arr.slice(0, 1)
 
   assert.is(calls, 2)
 })
