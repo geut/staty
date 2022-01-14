@@ -185,6 +185,8 @@ class InternalStaty {
 export function staty (target = {}) {
   const internal = new InternalStaty(target)
 
+  const isArray = Array.isArray(target)
+
   const state = new Proxy(target, {
     get (target, prop) {
       if (prop === kStaty) return internal
@@ -218,6 +220,18 @@ export function staty (target = {}) {
         }
 
         return value
+      }
+
+      if (isArray && ['splice', 'unshift', 'pop', 'shift', 'reverse', 'sort'].includes(prop)) {
+        if (!internal.patched) {
+          internal.patched = true
+          return (...args) => {
+            transaction(state, () => {
+              state[prop](...args)
+            })
+          }
+        }
+        internal.patched = false
       }
 
       return value

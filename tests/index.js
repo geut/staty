@@ -437,4 +437,21 @@ test('no snapshot', () => {
   assert.is(plan, 0)
 })
 
+test.only('array splice', () => {
+  let calls = 0
+
+  const state = staty({
+    arr: [0, 1, 3]
+  })
+
+  subscribe(state, (state) => {
+    console.log(state)
+    calls++
+  })
+
+  state.arr.splice(0, 1)
+
+  assert.is(calls, 1)
+})
+
 test.run()
