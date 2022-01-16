@@ -238,23 +238,25 @@ export function staty (target = {}) {
     },
     set (target, prop, value) {
       const oldValue = Reflect.get(target, prop)
+      const oldValueStaty = oldValue?.[kStaty]
 
       // start ref support
-      if (oldValue && oldValue?.[kStaty]?.isRef) {
-        const ref = oldValue?.[kStaty]
-        if (oldValue === value || ref.value === value) return true
+      if (oldValueStaty?.isRef) {
+        if (oldValue === value || oldValueStaty.value === value) return true
         if ((!value || !value?.[kStaty]?.isRef)) {
-          ref.value = value
-          ref.cacheSnapshot = null
-          state[kStaty].run(prop)
+          oldValueStaty.value = value
+          oldValueStaty.cacheSnapshot = null
+          internal.run(prop)
         }
         return true
       }
 
-      if (value && value?.[kStaty]?.isRef) {
+      let valueStaty = value?.[kStaty]
+
+      if (valueStaty?.isRef) {
         if (Reflect.set(target, prop, value)) {
-          value[kStaty].cacheSnapshot = null
-          state[kStaty].run(prop)
+          valueStaty.cacheSnapshot = null
+          internal.run(prop)
         }
         return true
       }
@@ -264,24 +266,25 @@ export function staty (target = {}) {
 
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
-        const parent = value?.[kStaty]?.parent
+        const parent = valueStaty?.parent
 
         if (parent && parent !== state) {
-          value[kStaty].prop = prop
-          value[kStaty].parent = state
+          valueStaty.prop = prop
+          valueStaty.parent = state
         } else if (!parent) {
           value = staty(value)
-          value[kStaty].prop = prop
-          value[kStaty].parent = state
+          valueStaty = value[kStaty]
+          valueStaty.prop = prop
+          valueStaty.parent = state
         }
       }
 
       if (Reflect.set(target, prop, value)) {
-        if (oldValue?.[kStaty]) {
-          oldValue[kStaty].parent = null
+        if (oldValueStaty) {
+          oldValueStaty.parent = null
         }
 
-        state[kStaty].run(prop)
+        internal.run(prop)
         return true
       }
 
@@ -292,7 +295,7 @@ export function staty (target = {}) {
       if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
       if (!(prop in target)) return false
       if (Reflect.deleteProperty(target, prop)) {
-        state[kStaty].run(prop)
+        internal.run(prop)
         return true
       }
     }
