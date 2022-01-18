@@ -192,7 +192,7 @@ test('array push/slice', () => {
   let calls = 0
 
   const state = staty({
-    arr: [{}]
+    arr: [{ id: '0' }, { id: '1' }]
   })
 
   subscribe(state, (snap) => {
@@ -201,8 +201,9 @@ test('array push/slice', () => {
 
   state.arr.push('val')
   state.arr = state.arr.slice(0, 1)
+  state.arr[0].id = 'changed'
 
-  assert.is(calls, 2)
+  assert.is(calls, 3)
 })
 
 test('subscribe missing prop', () => {
