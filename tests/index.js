@@ -199,11 +199,15 @@ test('array push/slice', () => {
     calls++
   })
 
+  subscribe(state.arr, () => {
+    calls++
+  })
+
   state.arr.push('val')
   state.arr = state.arr.slice(0, 1)
   state.arr[0].id = 'changed'
 
-  assert.is(calls, 3)
+  assert.is(calls, 5)
 })
 
 test('subscribe missing prop', () => {
@@ -496,6 +500,44 @@ test('batch', async () => {
   assert.is(calls.count, 1)
   assert.is(calls.innerCount, 1)
   assert.is(calls.multiple, 1)
+})
+
+test('set', () => {
+  let calls = 0
+
+  const state = staty({
+    bag: new Set()
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  const obj = staty({ count: 0 })
+  state.bag.add(obj)
+  obj.count++
+  state.bag.delete(obj)
+  obj.count++
+  assert.is(calls, 3)
+})
+
+test('map', () => {
+  let calls = 0
+
+  const state = staty({
+    map: new Map()
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  const obj = staty({ count: 0 })
+  state.map.set('key1', obj)
+  obj.count++
+  state.map.delete('key1')
+  obj.count++
+  assert.is(calls, 3)
 })
 
 test.run()

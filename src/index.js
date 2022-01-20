@@ -83,24 +83,26 @@ class InternalStaty {
     return this.proxy[prop]
   }
 
-  run (prop, init) {
+  run (prop) {
     const subscriptions = this.subscriptions
     this.cacheSnapshot = null
 
     const transaction = transactions.current
 
-    for (const [key, handlers] of subscriptions.props.entries()) {
-      if (prop.startsWith(`${key}.`) || prop === key) {
-        Array.from(handlers.values()).forEach(handler => {
-          if (!transaction) {
-            this._run(handler)
-            return
-          }
+    if (prop) {
+      for (const [key, handlers] of subscriptions.props.entries()) {
+        if (prop.startsWith(`${key}.`) || prop === key) {
+          Array.from(handlers.values()).forEach(handler => {
+            if (!transaction) {
+              this._run(handler)
+              return
+            }
 
-          if (transaction.valid(handler)) {
-            transaction.add(handler)
-          }
-        })
+            if (transaction.valid(handler)) {
+              transaction.add(handler)
+            }
+          })
+        }
       }
     }
 
@@ -116,9 +118,8 @@ class InternalStaty {
     })
 
     this.propsBinded.forEach((parents, propBinded) => {
-      parents.forEach(parent => {
-        parent.run(`${propBinded}.${prop}`)
-      })
+      const parentProp = prop ? `${propBinded}.${prop}` : propBinded
+      parents.forEach(parent => parent.run(parentProp))
     })
   }
 
@@ -131,6 +132,11 @@ class InternalStaty {
   }
 }
 
+const isArray = type => type === '[object Array]'
+const isSetCollection = type => type === '[object Set]'
+const isMapCollection = type => type === '[object Map]'
+const isValidForStaty = type => type === '[object Object]' || isArray(type) || isSetCollection(type) || isMapCollection(type)
+
 /**
  * Creates a new proxy-state
  *
@@ -140,7 +146,7 @@ class InternalStaty {
 export function staty (target = {}) {
   const internal = new InternalStaty(target)
 
-  const isArray = Array.isArray(target)
+  const targetType = Object.prototype.toString.call(target)
 
   const state = new Proxy(target, {
     get (target, prop) {
@@ -161,7 +167,7 @@ export function staty (target = {}) {
       }
 
       const type = Object.prototype.toString.call(value)
-      if (type === '[object Object]' || type === '[object Array]') {
+      if (isValidForStaty(type)) {
         if (!valueStaty) {
           value = staty(value)
           valueStaty = value[kStaty]
@@ -171,16 +177,73 @@ export function staty (target = {}) {
         return value
       }
 
-      if (isArray && ['splice', 'unshift', 'pop', 'shift', 'reverse', 'sort'].includes(prop)) {
-        if (!internal.patched) {
-          internal.patched = true
-          return (...args) => {
-            transaction(() => {
-              state[prop](...args)
-            })
+      if (type === '[object Function]') {
+        if (isArray(targetType) && ['splice', 'unshift', 'pop', 'shift', 'reverse', 'sort'].includes(prop)) {
+          if (!internal.patched) {
+            internal.patched = true
+            return (...args) => {
+              transaction(() => {
+                state[prop](...args)
+              })
+            }
           }
+          internal.patched = false
         }
-        internal.patched = false
+
+        if (isSetCollection(targetType)) {
+          if (prop === 'add') {
+            return (val) => {
+              if (target.has(val)) return
+              target.add(val)
+              if (val?.[kStaty]) {
+                val[kStaty].addParent('*', internal)
+              }
+              internal.run()
+            }
+          }
+
+          if (prop === 'delete') {
+            return (val) => {
+              if (!target.delete(val)) return
+              if (val && val?.[kStaty]) {
+                val[kStaty].delParent('*', internal)
+              }
+              internal.run()
+            }
+          }
+
+          return value.bind(target)
+        }
+
+        if (isMapCollection(targetType)) {
+          if (prop === 'set') {
+            return (key, val) => {
+              const oldVal = target.get(key)
+              if (oldVal && oldVal === val) return
+              target.set(key, val)
+              if (oldVal?.[kStaty]) {
+                oldVal[kStaty].delParent(key, internal)
+              }
+              if (val?.[kStaty]) {
+                val[kStaty].addParent(key, internal)
+              }
+              internal.run(key)
+            }
+          }
+
+          if (prop === 'delete') {
+            return (key) => {
+              const val = target.get(key)
+              if (!target.delete(key)) return
+              if (val && val?.[kStaty]) {
+                val[kStaty].delParent(key, internal)
+              }
+              internal.run(key)
+            }
+          }
+
+          return value.bind(target)
+        }
       }
 
       return value
@@ -195,14 +258,14 @@ export function staty (target = {}) {
         if (oldValue === value || oldValueStaty.value === value) return true
         if ((!value || !valueStaty?.isRef)) {
           oldValueStaty.value = value
-          internal.run(prop, true)
+          internal.run(prop)
         }
         return true
       }
 
       if (valueStaty?.isRef) {
         if (Reflect.set(target, prop, value)) {
-          internal.run(prop, true)
+          internal.run(prop)
         }
         return true
       }
@@ -225,7 +288,7 @@ export function staty (target = {}) {
           valueStaty.addParent(prop, internal)
         }
 
-        internal.run(prop, true)
+        internal.run(prop)
         return true
       }
 
@@ -242,7 +305,7 @@ export function staty (target = {}) {
       if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
       if (!(prop in target)) return false
       if (Reflect.deleteProperty(target, prop)) {
-        internal.run(prop, true)
+        internal.run(prop)
         return true
       }
     }
