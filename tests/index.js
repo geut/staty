@@ -365,7 +365,7 @@ test('transaction', () => {
     calls++
   })
 
-  transaction(state, () => {
+  transaction(() => {
     state.inc++
     state.inc++
   })
@@ -382,13 +382,13 @@ test('transaction names', () => {
 
   subscribe(state, () => {
     calls++
-  })
+  }, { transactionFilter: { exclude: /internal/ } })
 
   subscribe(state, () => {
     calls++
   }, { transactionFilter: /internal/ })
 
-  transaction(state, () => {
+  transaction(() => {
     state.prop0++
   }, 'internal')
 

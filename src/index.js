@@ -3,6 +3,8 @@
 import debug from 'debug'
 
 import { configureSnapshot } from './snapshot.js'
+import { batchHandler } from './batch.js'
+import { TransactionManager } from './transaction.js'
 
 const log = debug('staty')
 
@@ -11,7 +13,7 @@ const kController = Symbol('controler')
 
 const noop = () => {}
 
-const _snapshot = configureSnapshot({ kStaty, log })
+const transactions = new TransactionManager()
 
 function _subscribe (state, handler, prop, opts = {}) {
   const { snapshot, transactionFilter = null } = opts
@@ -38,60 +40,6 @@ function _subscribe (state, handler, prop, opts = {}) {
   }
 }
 
-function dlv (obj, key) {
-  let p
-  key = key.split ? key.split('.') : key
-  for (p = 0; p < key.length; p++) {
-    if (obj) {
-      const k = key[p]
-      if (obj?.[kStaty]?.refValue) {
-        obj = obj[kStaty].refValue(k)
-      } else {
-        obj = obj[k]
-      }
-    } else {
-      return obj
-    }
-  }
-  return obj
-}
-
-function _snapshotProp (state, prop) {
-  const value = dlv(state, prop)
-
-  if (!value || typeof value !== 'object') {
-    return value
-  }
-
-  if (value[kStaty]) {
-    return _snapshot(value)
-  }
-
-  return dlv(_snapshot(state), prop)
-}
-
-const batches = new Map()
-
-function batchHandler (handler, snapshot) {
-  if (batches.size > 0) {
-    batches.set(handler, snapshot)
-    return
-  }
-
-  batches.set(handler, snapshot)
-
-  queueMicrotask(() => {
-    batches.forEach((snapshot, handler) => {
-      try {
-        handler(snapshot)
-      } catch (err) {
-        console.error(err)
-      }
-    })
-    batches.clear()
-  })
-}
-
 /**
  * @callback UnsubscribeFunction
  */
@@ -103,17 +51,28 @@ class InternalStaty {
       default: new Set(),
       props: new Map()
     }
-    this.parent = null
     this.cacheSnapshot = null
-    this.prop = null
+    this.propsBinded = new Map()
     this.refValue = this.refValue.bind(this)
-    this.transactions = []
   }
 
-  get currentTransaction () {
-    if (this.transactions.length > 0) return this.transactions[this.transactions.length - 1]
-    if (this.parent) return this.parent[kStaty].currentTransaction
-    return null
+  addParent (prop, parent) {
+    let parents
+    if (this.propsBinded.has(prop)) {
+      parents = this.propsBinded.get(prop)
+    } else {
+      parents = new Set()
+      this.propsBinded.set(prop, parents)
+    }
+
+    parents.add(parent)
+  }
+
+  delParent (prop, parent) {
+    if (!this.propsBinded.has(prop)) return
+    const parents = this.propsBinded.get(prop)
+    parents.delete(parent)
+    if (parents.size === 0) this.propsBinded.delete(prop)
   }
 
   refValue (prop) {
@@ -124,46 +83,46 @@ class InternalStaty {
     return this.proxy[prop]
   }
 
-  run (prop, transaction = this.currentTransaction) {
+  run (prop, init) {
     const subscriptions = this.subscriptions
     this.cacheSnapshot = null
 
-    const transactionName = transaction ? transaction.name : '*'
+    const transaction = transactions.current
 
     for (const [key, handlers] of subscriptions.props.entries()) {
       if (prop.startsWith(`${key}.`) || prop === key) {
         Array.from(handlers.values()).forEach(handler => {
-          if (handler.transactionFilter && handler.transactionFilter.test(transactionName)) return
-          this._run(handler, transaction)
+          if (!transaction) {
+            this._run(handler)
+            return
+          }
+
+          if (transaction.valid(handler)) {
+            transaction.add(handler)
+          }
         })
       }
     }
 
     Array.from(subscriptions.default.values()).forEach(handler => {
-      if (handler.transactionFilter && handler.transactionFilter.test(transactionName)) return
-      this._run(handler, transaction)
+      if (!transaction) {
+        this._run(handler)
+        return
+      }
+
+      if (transaction.valid(handler)) {
+        transaction.add(handler)
+      }
     })
 
-    if (this.parent) {
-      this.parent[kStaty].run(`${this.prop}.${prop}`, transaction)
-    }
+    this.propsBinded.forEach((parents, propBinded) => {
+      parents.forEach(parent => {
+        parent.run(`${propBinded}.${prop}`)
+      })
+    })
   }
 
-  createTransaction (name = '*') {
-    const transaction = { handlers: new Set(), name }
-    this.transactions.push(transaction)
-    return () => {
-      this.transactions.pop()
-      transaction.handlers.forEach(handler => this._run(handler))
-    }
-  }
-
-  _run (handler, transaction) {
-    if (transaction) {
-      transaction.handlers.add(handler)
-      return
-    }
-
+  _run (handler) {
     try {
       handler.run(handler.snapshot())
     } catch (err) {
@@ -194,27 +153,21 @@ export function staty (target = {}) {
 
       if (value === null || value === undefined) return value
 
-      const internalStaty = value?.[kStaty]
+      let valueStaty = value?.[kStaty]
 
       // ref
-      if (internalStaty?.isRef) {
-        return internalStaty.value
+      if (valueStaty?.isRef) {
+        return valueStaty.value
       }
 
       const type = Object.prototype.toString.call(value)
       if (type === '[object Object]' || type === '[object Array]') {
-        const parent = internalStaty?.parent
-
-        if (parent && parent !== state) {
-          internalStaty.prop = prop
-          internalStaty.parent = state
-        } else if (!parent) {
+        if (!valueStaty) {
           value = staty(value)
-          value[kStaty].prop = prop
-          value[kStaty].parent = state
-          Reflect.set(target, prop, value)
+          valueStaty = value[kStaty]
         }
-
+        valueStaty.addParent(prop, internal)
+        Reflect.set(target, prop, value)
         return value
       }
 
@@ -222,7 +175,7 @@ export function staty (target = {}) {
         if (!internal.patched) {
           internal.patched = true
           return (...args) => {
-            transaction(state, () => {
+            transaction(() => {
               state[prop](...args)
             })
           }
@@ -242,16 +195,14 @@ export function staty (target = {}) {
         if (oldValue === value || oldValueStaty.value === value) return true
         if ((!value || !valueStaty?.isRef)) {
           oldValueStaty.value = value
-          oldValueStaty.cacheSnapshot = null
-          internal.run(prop)
+          internal.run(prop, true)
         }
         return true
       }
 
       if (valueStaty?.isRef) {
         if (Reflect.set(target, prop, value)) {
-          valueStaty.cacheSnapshot = null
-          internal.run(prop)
+          internal.run(prop, true)
         }
         return true
       }
@@ -260,27 +211,21 @@ export function staty (target = {}) {
       if (oldValue === value) return true
 
       const type = Object.prototype.toString.call(value)
-      if (type === '[object Object]' || type === '[object Array]') {
-        const parent = valueStaty?.parent
-
-        if (parent && parent !== state) {
-          valueStaty.prop = prop
-          valueStaty.parent = state
-        } else if (!parent) {
-          value = staty(value)
-          valueStaty = value[kStaty]
-          valueStaty.prop = prop
-          valueStaty.parent = state
-        }
+      if (!valueStaty && (type === '[object Object]' || type === '[object Array]')) {
+        value = staty(value)
+        valueStaty = value[kStaty]
       }
 
       if (Reflect.set(target, prop, value)) {
         if (oldValueStaty) {
-          oldValueStaty.prop = null
-          oldValueStaty.parent = null
+          oldValueStaty.delParent(prop, internal)
         }
 
-        internal.run(prop)
+        if (valueStaty) {
+          valueStaty.addParent(prop, internal)
+        }
+
+        internal.run(prop, true)
         return true
       }
 
@@ -291,14 +236,13 @@ export function staty (target = {}) {
       const oldValue = Reflect.get(target, prop)
       const oldValueStaty = oldValue?.[kStaty]
       if (oldValueStaty) {
-        oldValueStaty.prop = null
-        oldValueStaty.parent = null
+        oldValueStaty.delParent(prop, internal)
       }
 
       if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
       if (!(prop in target)) return false
       if (Reflect.deleteProperty(target, prop)) {
-        internal.run(prop)
+        internal.run(prop, true)
         return true
       }
     }
@@ -396,25 +340,6 @@ export function subscribe (state, handler, opts = {}) {
 }
 
 /**
- * Creates a snapshot of the state
- *
- * @param {Proxy} state
- * @param {(String|Array<String>)} [prop]
- * @returns {Object}
- */
-export function snapshot (state, prop) {
-  if (Array.isArray(prop)) {
-    return prop.map(p => _snapshotProp(state, p))
-  }
-
-  if (typeof prop === 'string') {
-    return _snapshotProp(state, prop)
-  }
-
-  return _snapshot(state)
-}
-
-/**
  * Add a ref to another object
  *
  * @param {*} value
@@ -441,20 +366,27 @@ export function ref (value, mapSnapshot) {
 
 /**
  * Create a transaction
- * @param {Proxy} state
  * @param {function} handler
  * @param {string} transactionName
  */
-export function transaction (state, handler, transactionName) {
-  const controller = state?.[kStaty]
-  if (!controller) throw new Error('invalid state')
-
-  const release = controller.createTransaction(transactionName)
+export function transaction (handler, transactionName) {
+  const transaction = transactions.create(transactionName)
   try {
     handler()
-  } catch (err) {
-    console.error(err)
   } finally {
-    release()
+    transaction.done()
   }
+}
+
+const _snapshot = configureSnapshot({ kStaty, log })
+
+/**
+ * Creates a snapshot of the state
+ *
+ * @param {Proxy} state
+ * @param {(String|Array<String>)} [prop]
+ * @returns {Object}
+ */
+export function snapshot (state, prop) {
+  return _snapshot(state, prop)
 }
