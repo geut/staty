@@ -195,9 +195,7 @@ export function staty (target = {}) {
             return (val) => {
               if (target.has(val)) return
               target.add(val)
-              if (val?.[kStaty]) {
-                val[kStaty].addParent('*', internal)
-              }
+              val?.[kStaty]?.addParent('*', internal)
               internal.run()
             }
           }
@@ -205,9 +203,7 @@ export function staty (target = {}) {
           if (prop === 'delete') {
             return (val) => {
               if (!target.delete(val)) return
-              if (val && val?.[kStaty]) {
-                val[kStaty].delParent('*', internal)
-              }
+              val?.[kStaty]?.delParent('*', internal)
               internal.run()
             }
           }
@@ -221,12 +217,9 @@ export function staty (target = {}) {
               const oldVal = target.get(key)
               if (oldVal && oldVal === val) return
               target.set(key, val)
-              if (oldVal?.[kStaty]) {
-                oldVal[kStaty].delParent(key, internal)
-              }
-              if (val?.[kStaty]) {
-                val[kStaty].addParent(key, internal)
-              }
+              const parentProp = typeof key === 'string' ? key : '*'
+              oldVal?.[kStaty]?.delParent(parentProp, internal)
+              val?.[kStaty]?.addParent(parentProp, internal)
               internal.run(key)
             }
           }
@@ -235,9 +228,8 @@ export function staty (target = {}) {
             return (key) => {
               const val = target.get(key)
               if (!target.delete(key)) return
-              if (val && val?.[kStaty]) {
-                val[kStaty].delParent(key, internal)
-              }
+              const parentProp = typeof key === 'string' ? key : '*'
+              val?.[kStaty]?.delParent(parentProp, internal)
               internal.run(key)
             }
           }
@@ -280,14 +272,8 @@ export function staty (target = {}) {
       }
 
       if (Reflect.set(target, prop, value)) {
-        if (oldValueStaty) {
-          oldValueStaty.delParent(prop, internal)
-        }
-
-        if (valueStaty) {
-          valueStaty.addParent(prop, internal)
-        }
-
+        oldValueStaty?.delParent(prop, internal)
+        valueStaty?.addParent(prop, internal)
         internal.run(prop)
         return true
       }
@@ -297,10 +283,7 @@ export function staty (target = {}) {
 
     deleteProperty (target, prop) {
       const oldValue = Reflect.get(target, prop)
-      const oldValueStaty = oldValue?.[kStaty]
-      if (oldValueStaty) {
-        oldValueStaty.delParent(prop, internal)
-      }
+      oldValue?.[kStaty]?.delParent(prop, internal)
 
       if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
       if (!(prop in target)) return false
