@@ -188,6 +188,7 @@ export function staty (target = {}) {
             }
           }
           internal.patched = false
+          return value
         }
 
         if (isSetCollection(targetType)) {
@@ -265,8 +266,7 @@ export function staty (target = {}) {
 
       if (oldValue === value) return true
 
-      const type = Object.prototype.toString.call(value)
-      if (!valueStaty && (type === '[object Object]' || type === '[object Array]')) {
+      if (!valueStaty && isValidForStaty(Object.prototype.toString.call(value))) {
         value = staty(value)
         valueStaty = value[kStaty]
       }
