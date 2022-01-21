@@ -356,6 +356,14 @@ test('unparent', () => {
   state.inner = {}
   state.inner.name = 'test'
   assert.is(calls, 4)
+  const inner = state.inner
+  delete state.inner
+  inner.name = 'test2'
+  assert.is(calls, 6)
+
+  // ref
+  state.ref = ref({}, () => {})
+  delete state.ref
 })
 
 test('transaction', () => {
