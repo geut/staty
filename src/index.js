@@ -159,7 +159,7 @@ export function staty (target, opts = {}) {
         val = staty(val, { targetType: type, convertMapItems })
       }
       const parentProp = typeof key === 'string' ? key : '*'
-      val?.[kStaty]?.addParent(parentProp, internal)
+      val?.[kStaty]?.addParent?.(parentProp, internal)
       newTarget.set(key, val)
     })
     target = newTarget
@@ -213,7 +213,7 @@ export function staty (target, opts = {}) {
             return (val) => {
               if (target.has(val)) return
               target.add(val)
-              val?.[kStaty]?.addParent('*', internal)
+              val?.[kStaty]?.addParent?.('*', internal)
               internal.run()
             }
           }
@@ -221,7 +221,7 @@ export function staty (target, opts = {}) {
           if (prop === 'delete') {
             return (val) => {
               if (!target.delete(val)) return
-              val?.[kStaty]?.delParent('*', internal)
+              val?.[kStaty]?.delParent?.('*', internal)
               internal.run()
             }
           }
@@ -240,8 +240,8 @@ export function staty (target, opts = {}) {
               }
               target.set(key, val)
               const parentProp = typeof key === 'string' ? key : '*'
-              oldVal?.[kStaty]?.delParent(parentProp, internal)
-              val?.[kStaty]?.addParent(parentProp, internal)
+              oldVal?.[kStaty]?.delParent?.(parentProp, internal)
+              val?.[kStaty]?.addParent?.(parentProp, internal)
               internal.run(key)
             }
           }
@@ -251,7 +251,7 @@ export function staty (target, opts = {}) {
               const val = target.get(key)
               if (!target.delete(key)) return
               const parentProp = typeof key === 'string' ? key : '*'
-              val?.[kStaty]?.delParent(parentProp, internal)
+              val?.[kStaty]?.delParent?.(parentProp, internal)
               internal.run(key)
             }
           }
@@ -305,7 +305,7 @@ export function staty (target, opts = {}) {
 
     deleteProperty (target, prop) {
       const oldValue = Reflect.get(target, prop)
-      oldValue?.[kStaty]?.delParent(prop, internal)
+      oldValue?.[kStaty]?.delParent?.(prop, internal)
 
       if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
       if (!(prop in target)) return false
