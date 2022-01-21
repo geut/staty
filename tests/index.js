@@ -521,23 +521,65 @@ test('set', () => {
   assert.is(calls, 3)
 })
 
-test('map', () => {
+test('map convertMapItems', () => {
   let calls = 0
 
   const state = staty({
-    map: new Map()
+    map: new Map([['key0', { count: 0 }]])
   })
 
   subscribe(state, () => {
     calls++
   })
 
-  const obj = staty({ count: 0 })
+  state.map.get('key0').count++
+  const obj = { count: 0 }
   state.map.set('key1', obj)
-  obj.count++
+  const liveObj = state.map.get('key1')
+  liveObj.count++
   state.map.delete('key1')
-  obj.count++
-  assert.is(calls, 3)
+  liveObj.count++
+  assert.is(calls, 4)
 })
+
+test('map convertMapItems false', () => {
+  let calls = 0
+
+  const state = staty({
+    map: new Map([['key0', { count: 0 }]])
+  }, { convertMapItems: false })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  state.map.get('key0').count++
+  const obj = { count: 0 }
+  state.map.set('key1', obj)
+  const liveObj = state.map.get('key1')
+  liveObj.count++
+  state.map.delete('key1')
+  liveObj.count++
+  assert.is(calls, 2)
+})
+// test('map convertMapItems', () => {
+//   let calls = 0
+
+//   const state = staty({
+//     map: new Map()
+//   })
+
+//   subscribe(state, () => {
+//     calls++
+//   })
+
+//   const obj = { count: 0 }
+//   state.map.set('key1', obj)
+//   const liveObj = state.map.get('key1')
+//   liveObj.count++
+//   state.map.delete('key1')
+//   liveObj.count++
+//   assert.is(calls, 3)
+// })
 
 test.run()
