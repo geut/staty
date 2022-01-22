@@ -23,7 +23,7 @@ class Transaction {
 
   _run (handler) {
     try {
-      handler.run(handler.snapshot())
+      handler.run()
     } catch (err) {
       console.error(err)
     }

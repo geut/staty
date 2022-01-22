@@ -1,17 +1,17 @@
-const batches = new Map()
+const batches = new Set()
 
-export function batchHandler (handler, snapshot) {
+export function batchHandler (handler) {
   if (batches.size > 0) {
-    batches.set(handler, snapshot)
+    batches.add(handler)
     return
   }
 
-  batches.set(handler, snapshot)
+  batches.add(handler)
 
   queueMicrotask(() => {
-    batches.forEach((snapshot, handler) => {
+    batches.forEach(handler => {
       try {
-        handler(snapshot)
+        handler()
       } catch (err) {
         console.error(err)
       }

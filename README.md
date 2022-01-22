@@ -24,17 +24,17 @@ const state = staty({
 
 console.log(snapshot(state)) // { count: 0 }
 
-subscribe(state, state => {
+subscribe(state, () => {
   console.log(state) // { count: 1 }
 })
 
-subscribe(state, count => {
-  console.log(count) // 1
+subscribe(state, () => {
+  console.log(state.count) // 1
 }, { filter: 'count' })
 
 // filter multiple values
-subscribe(state, ([count]) => {
-  console.log(count) // 1
+subscribe(state, () => {
+  console.log(state.count) // 1
 }, { filter: ['count'] })
 
 state.count++

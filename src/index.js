@@ -12,14 +12,12 @@ const kStaty = Symbol('staty')
 const kController = Symbol('controler')
 const kNoProp = Symbol('noprop')
 
-const noop = () => {}
-
 const transactions = new TransactionManager()
 
 function _subscribe (state, handler, prop, opts = {}) {
-  const { snapshot, transactionFilter = null } = opts
+  const { transactionFilter = null } = opts
 
-  handler = { run: handler, snapshot, transactionFilter }
+  handler = { run: handler, transactionFilter }
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -130,7 +128,7 @@ class InternalStaty {
 
   _run (handler) {
     try {
-      handler.run(handler.snapshot())
+      handler.run()
     } catch (err) {
       console.error(err)
     }
@@ -370,18 +368,15 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  let { filter: prop, snapshot: userSnapshot, batch = false, transactionFilter } = opts
-
-  userSnapshot = userSnapshot === false ? noop : (userSnapshot || (() => snapshot(state, prop)))
+  const { filter: prop, batch = false, transactionFilter } = opts
 
   const subscribeProps = {
-    snapshot: userSnapshot,
     transactionFilter
   }
 
   if (batch) {
     const userHandler = handler
-    handler = (snapshot) => batchHandler(userHandler, snapshot)
+    handler = () => batchHandler(userHandler)
   }
 
   if (!prop) {
@@ -389,22 +384,22 @@ export function subscribe (state, handler, opts = {}) {
   }
 
   if (!Array.isArray(prop)) {
-    return _subscribe(state, snapshot => {
-      return handler(snapshot)
+    return _subscribe(state, () => {
+      return handler()
     }, prop, subscribeProps)
   }
 
   let scheduled = false
   const unsubscribes = prop.map(prop => {
-    return _subscribe(state, (snapshot) => {
-      if (!batch) return handler(snapshot)
+    return _subscribe(state, () => {
+      if (!batch) return handler()
 
       if (!scheduled) {
         scheduled = true
         queueMicrotask(() => {
           scheduled = false
         })
-        return handler(snapshot)
+        return handler()
       }
     }, prop, subscribeProps)
   })

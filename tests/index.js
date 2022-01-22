@@ -167,9 +167,9 @@ test('subscribe by prop arrays', () => {
 
   let lastSnapshot
 
-  subscribe(state, (snapshot) => {
+  subscribe(state, () => {
     calls++
-    lastSnapshot = snapshot
+    lastSnapshot = snapshot(state, ['num0', 'num1', 'arr'])
   }, {
     filter: ['num0', 'num1', 'arr']
   })
@@ -186,28 +186,6 @@ test('subscribe by prop arrays', () => {
   assert.is(calls, 3)
 
   assert.equal(lastSnapshot, snapshot(state, ['num0', 'num1', 'arr']))
-})
-
-test('array push/slice', () => {
-  let calls = 0
-
-  const state = staty({
-    arr: [{ id: '0' }, { id: '1' }]
-  })
-
-  subscribe(state, (snap) => {
-    calls++
-  })
-
-  subscribe(state.arr, () => {
-    calls++
-  })
-
-  state.arr.push('val')
-  state.arr = state.arr.slice(0, 1)
-  state.arr[0].id = 'changed'
-
-  assert.is(calls, 5)
 })
 
 test('subscribe missing prop', () => {
@@ -416,56 +394,23 @@ test('readme', () => {
 
   assert.equal(snapshot(state), { count: 0 })
 
-  subscribe(state, state => {
+  subscribe(state, () => {
     assert.equal(snapshot(state), { count: 1 })
     plan--
   })
 
-  subscribe(state, count => {
-    assert.is(count, 1)
+  subscribe(state, () => {
+    assert.is(state.count, 1)
     plan--
   }, { filter: 'count' })
 
-  subscribe(state, ([count]) => {
-    assert.is(count, 1)
+  subscribe(state, () => {
+    assert.is(state.count, 1)
     plan--
   }, { filter: ['count'] })
 
   state.count++
   assert.is(plan, 0)
-})
-
-test('no snapshot', () => {
-  let plan = 1
-  const state = staty({
-    count: 0
-  })
-
-  subscribe(state, state => {
-    assert.is(state, undefined)
-    plan--
-  }, { snapshot: false })
-
-  state.count++
-  assert.is(plan, 0)
-})
-
-test('array mutable operations', () => {
-  let calls = 0
-
-  const state = staty({
-    arr: [0, 1, 3]
-  })
-
-  subscribe(state, (state) => {
-    calls++
-  })
-
-  state.arr.splice(0, 1)
-  state.arr.pop()
-  state.arr.shift()
-
-  assert.is(calls, 3)
 })
 
 test('batch', async () => {
@@ -508,6 +453,46 @@ test('batch', async () => {
   assert.is(calls.count, 1)
   assert.is(calls.innerCount, 1)
   assert.is(calls.multiple, 1)
+})
+
+test('array immutable operations', () => {
+  let calls = 0
+
+  const state = staty({
+    arr: [{ id: '0' }, { id: '1' }]
+  })
+
+  subscribe(state, (snap) => {
+    calls++
+  })
+
+  subscribe(state.arr, () => {
+    calls++
+  })
+
+  state.arr.push('val')
+  state.arr = state.arr.slice(0, 1)
+  state.arr[0].id = 'changed'
+
+  assert.is(calls, 5)
+})
+
+test('array mutable operations', () => {
+  let calls = 0
+
+  const state = staty({
+    arr: [0, 1, 3]
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  state.arr.splice(0, 1)
+  state.arr.pop()
+  state.arr.shift()
+
+  assert.is(calls, 3)
 })
 
 test('set', () => {
