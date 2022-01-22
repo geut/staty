@@ -570,24 +570,5 @@ test('map convertMapItems false', () => {
   liveObj.count++
   assert.is(calls, 2)
 })
-// test('map convertMapItems', () => {
-//   let calls = 0
-
-//   const state = staty({
-//     map: new Map()
-//   })
-
-//   subscribe(state, () => {
-//     calls++
-//   })
-
-//   const obj = { count: 0 }
-//   state.map.set('key1', obj)
-//   const liveObj = state.map.get('key1')
-//   liveObj.count++
-//   state.map.delete('key1')
-//   liveObj.count++
-//   assert.is(calls, 3)
-// })
 
 test.run()

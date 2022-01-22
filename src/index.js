@@ -10,6 +10,7 @@ const log = debug('staty')
 
 const kStaty = Symbol('staty')
 const kController = Symbol('controler')
+const kNoProp = Symbol('noprop')
 
 const noop = () => {}
 
@@ -118,7 +119,11 @@ class InternalStaty {
     })
 
     this.propsBinded.forEach((parents, propBinded) => {
-      const parentProp = prop ? `${propBinded}.${prop}` : propBinded
+      const parentProp = prop && propBinded !== kNoProp
+        ? `${propBinded}.${prop}`
+        : propBinded !== kNoProp
+          ? propBinded
+          : null
       parents.forEach(parent => parent.run(parentProp))
     })
   }
@@ -158,7 +163,7 @@ export function staty (target, opts = {}) {
       if (!val?.[kStaty] && isValidForStaty(type)) {
         val = staty(val, { targetType: type, convertMapItems })
       }
-      const parentProp = typeof key === 'string' ? key : '*'
+      const parentProp = typeof key === 'string' ? key : kNoProp
       val?.[kStaty]?.addParent?.(parentProp, internal)
       newTarget.set(key, val)
     })
@@ -213,7 +218,7 @@ export function staty (target, opts = {}) {
             return (val) => {
               if (target.has(val)) return
               target.add(val)
-              val?.[kStaty]?.addParent?.('*', internal)
+              val?.[kStaty]?.addParent?.(kNoProp, internal)
               internal.run()
             }
           }
@@ -221,7 +226,7 @@ export function staty (target, opts = {}) {
           if (prop === 'delete') {
             return (val) => {
               if (!target.delete(val)) return
-              val?.[kStaty]?.delParent?.('*', internal)
+              val?.[kStaty]?.delParent?.(kNoProp, internal)
               internal.run()
             }
           }
@@ -239,7 +244,7 @@ export function staty (target, opts = {}) {
                 val = staty(val, { targetType: type, convertMapItems })
               }
               target.set(key, val)
-              const parentProp = typeof key === 'string' ? key : '*'
+              const parentProp = typeof key === 'string' ? key : kNoProp
               oldVal?.[kStaty]?.delParent?.(parentProp, internal)
               val?.[kStaty]?.addParent?.(parentProp, internal)
               internal.run(key)
@@ -250,7 +255,7 @@ export function staty (target, opts = {}) {
             return (key) => {
               const val = target.get(key)
               if (!target.delete(key)) return
-              const parentProp = typeof key === 'string' ? key : '*'
+              const parentProp = typeof key === 'string' ? key : kNoProp
               val?.[kStaty]?.delParent?.(parentProp, internal)
               internal.run(key)
             }
