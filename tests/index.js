@@ -37,9 +37,8 @@ test('subscription', async () => {
     calls.inner++
   })
 
-  subscribe(state.inner, (val) => {
+  subscribe(state.inner, () => {
     calls['inner.val']++
-    assert.is(val, 'change')
   }, {
     filter: 'val'
   })
@@ -48,9 +47,8 @@ test('subscription', async () => {
     calls.arr++
   })
 
-  subscribe(state.arr[2], (val) => {
+  subscribe(state.arr[2], () => {
     calls['arr.val']++
-    assert.is(val, 'change')
   }, {
     filter: 'val'
   })
@@ -395,22 +393,20 @@ test('readme', () => {
   assert.equal(snapshot(state), { count: 0 })
 
   subscribe(state, () => {
-    assert.equal(snapshot(state), { count: 1 })
     plan--
   })
 
   subscribe(state, () => {
-    assert.is(state.count, 1)
     plan--
   }, { filter: 'count' })
 
   subscribe(state, () => {
-    assert.is(state.count, 1)
     plan--
   }, { filter: ['count'] })
 
   state.count++
   assert.is(plan, 0)
+  assert.is(state.count, 1)
 })
 
 test('batch', async () => {
