@@ -2,7 +2,7 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
-import { staty, subscribe, snapshot, ref, listeners, transaction } from '../src/index.js'
+import { staty, subscribe, snapshot, ref, listeners, action } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -342,7 +342,7 @@ test('unparent', () => {
   delete state.ref
 })
 
-test('transaction', () => {
+test('action', () => {
   let calls = 0
 
   const state = staty({
@@ -353,7 +353,7 @@ test('transaction', () => {
     calls++
   })
 
-  transaction(() => {
+  action(() => {
     state.inc++
     state.inc++
   })
@@ -361,7 +361,7 @@ test('transaction', () => {
   assert.is(calls, 1)
 })
 
-test('transaction names', () => {
+test('action names', () => {
   let calls = 0
 
   const state = staty({
@@ -370,13 +370,13 @@ test('transaction names', () => {
 
   subscribe(state, () => {
     calls++
-  }, { transactionFilter: { exclude: /internal/ } })
+  }, { actionFilter: { exclude: /internal/ } })
 
   subscribe(state, () => {
     calls++
-  }, { transactionFilter: /internal/ })
+  }, { actionFilter: /internal/ })
 
-  transaction(() => {
+  action(() => {
     state.prop0++
   }, 'internal')
 

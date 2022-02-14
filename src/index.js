@@ -4,7 +4,7 @@ import debug from 'debug'
 
 import { configureSnapshot } from './snapshot.js'
 import { batchHandler } from './batch.js'
-import { TransactionManager } from './transaction.js'
+import { ActionManager } from './action.js'
 
 const log = debug('staty')
 
@@ -12,12 +12,12 @@ const kStaty = Symbol('staty')
 const kController = Symbol('controler')
 const kNoProp = Symbol('noprop')
 
-const transactions = new TransactionManager()
+const actions = new ActionManager()
 
 function _subscribe (state, handler, prop, opts = {}) {
-  const { transactionFilter = null } = opts
+  const { actionFilter = null } = opts
 
-  handler = { run: handler, transactionFilter }
+  handler = { run: handler, actionFilter }
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -86,19 +86,19 @@ class InternalStaty {
     const subscriptions = this.subscriptions
     this.cacheSnapshot = null
 
-    const transaction = transactions.current
+    const action = actions.current
 
     if (prop) {
       for (const [key, handlers] of subscriptions.props.entries()) {
         if (prop.startsWith(`${key}.`) || prop === key) {
           Array.from(handlers.values()).forEach(handler => {
-            if (!transaction) {
+            if (!action) {
               this._run(handler)
               return
             }
 
-            if (transaction.valid(handler)) {
-              transaction.add(handler)
+            if (action.valid(handler)) {
+              action.add(handler)
             }
           })
         }
@@ -106,13 +106,13 @@ class InternalStaty {
     }
 
     Array.from(subscriptions.default.values()).forEach(handler => {
-      if (!transaction) {
+      if (!action) {
         this._run(handler)
         return
       }
 
-      if (transaction.valid(handler)) {
-        transaction.add(handler)
+      if (action.valid(handler)) {
+        action.add(handler)
       }
     })
 
@@ -202,7 +202,7 @@ export function staty (target, opts = {}) {
           if (!internal.patched) {
             internal.patched = true
             return (...args) => {
-              transaction(() => {
+              action(() => {
                 state[prop](...args)
               })
             }
@@ -368,10 +368,10 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  const { filter: prop, batch = false, transactionFilter } = opts
+  const { filter: prop, batch = false, actionFilter } = opts
 
   const subscribeProps = {
-    transactionFilter
+    actionFilter
   }
 
   if (batch) {
@@ -433,16 +433,16 @@ export function ref (value, mapSnapshot) {
 }
 
 /**
- * Create a transaction
+ * Create a action
  * @param {function} handler
- * @param {string} transactionName
+ * @param {string} actionName
  */
-export function transaction (handler, transactionName) {
-  const transaction = transactions.create(transactionName)
+export function action (handler, actionName) {
+  const action = actions.create(actionName)
   try {
     handler()
   } finally {
-    transaction.done()
+    action.done()
   }
 }
 
