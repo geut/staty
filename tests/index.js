@@ -552,4 +552,28 @@ test('map convertMapItems false', () => {
   assert.is(calls, 2)
 })
 
+test('autorun', () => {
+  let calls = 0
+  let callsByProps = 0
+
+  const state = staty({
+    count: 0,
+    text: ''
+  })
+
+  subscribe(state, () => {
+    calls++
+  }, { autorun: true })
+
+  subscribe(state, () => {
+    callsByProps++
+  }, { filter: ['count'], autorun: true })
+
+  state.count++
+  state.text = 'change'
+
+  assert.is(calls, 3)
+  assert.is(callsByProps, 2)
+})
+
 test.run()

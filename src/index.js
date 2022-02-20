@@ -368,7 +368,7 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  const { filter: prop, batch = false, actionFilter } = opts
+  const { filter: prop, batch = false, actionFilter, autorun = false } = opts
 
   const subscribeProps = {
     actionFilter
@@ -379,14 +379,19 @@ export function subscribe (state, handler, opts = {}) {
     handler = () => batchHandler(userHandler)
   }
 
+  let dispose
   if (!prop) {
-    return _subscribe(state, handler, null, subscribeProps)
+    dispose = _subscribe(state, handler, null, subscribeProps)
+    if (autorun) handler()
+    return dispose
   }
 
   if (!Array.isArray(prop)) {
-    return _subscribe(state, () => {
+    dispose = _subscribe(state, () => {
       return handler()
     }, prop, subscribeProps)
+    if (autorun) handler()
+    return dispose
   }
 
   let scheduled = false
@@ -404,6 +409,7 @@ export function subscribe (state, handler, opts = {}) {
     }, prop, subscribeProps)
   })
 
+  if (autorun) handler()
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
 }
 
