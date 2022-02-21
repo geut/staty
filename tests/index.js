@@ -576,4 +576,23 @@ test('autorun', () => {
   assert.is(callsByProps, 2)
 })
 
+test('action cancel', () => {
+  let calls = 0
+
+  const state = staty({
+    count: 0
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  action(cancel => {
+    state.count++
+    cancel()
+  })
+
+  assert.is(calls, 0)
+})
+
 test.run()

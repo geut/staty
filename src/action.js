@@ -19,6 +19,12 @@ class Action {
   done () {
     this._release()
     this._handlers.forEach(handler => this._run(handler))
+    this._handlers.clear()
+  }
+
+  cancel () {
+    this._release()
+    this._handlers.clear()
   }
 
   _run (handler) {

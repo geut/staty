@@ -446,7 +446,7 @@ export function ref (value, mapSnapshot) {
 export function action (handler, actionName) {
   const action = actions.create(actionName)
   try {
-    handler()
+    handler(() => action.cancel())
   } finally {
     action.done()
   }
