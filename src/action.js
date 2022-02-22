@@ -17,14 +17,14 @@ class Action {
   }
 
   done () {
-    this._release()
     this._handlers.forEach(handler => this._run(handler))
     this._handlers.clear()
+    this._release()
   }
 
   cancel () {
-    this._release()
     this._handlers.clear()
+    this._release()
   }
 
   _run (handler) {
@@ -38,18 +38,19 @@ class Action {
 
 export class ActionManager {
   constructor () {
-    this._actions = []
+    this._current = null
   }
 
   get current () {
-    return this._actions[this._actions.length - 1]
+    return this._current
   }
 
   create (name = '_') {
-    const action = new Action(name, () => {
-      this._actions.pop()
+    if (this._current) throw new Error('there is already an action running')
+
+    this._current = new Action(name, () => {
+      this._current = null
     })
-    this._actions.push(action)
-    return action
+    return this._current
   }
 }
