@@ -198,13 +198,17 @@ export function staty (target, opts = {}) {
       }
 
       if (type === '[object Function]') {
-        if (isArray(targetType) && ['splice', 'unshift', 'pop', 'shift', 'reverse', 'sort'].includes(prop)) {
+        if (isArray(targetType) && ['splice', 'unshift', 'push', 'pop', 'shift', 'reverse', 'sort'].includes(prop)) {
           if (!internal.patched) {
             internal.patched = true
             return (...args) => {
-              action(() => {
+              if (actions.current) {
                 state[prop](...args)
-              })
+              } else {
+                action(() => {
+                  state[prop](...args)
+                })
+              }
             }
           }
           internal.patched = false

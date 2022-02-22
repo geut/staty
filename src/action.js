@@ -46,7 +46,7 @@ export class ActionManager {
   }
 
   create (name = '_') {
-    if (this._current) throw new Error('there is already an action running')
+    if (this._current) throw new Error('there is already an action running: ', this._current.name)
 
     this._current = new Action(name, () => {
       this._current = null

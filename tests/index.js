@@ -488,7 +488,14 @@ test('array mutable operations', () => {
   state.arr.pop()
   state.arr.shift()
 
-  assert.is(calls, 3)
+  action(() => {
+    state.arr.push('')
+    state.arr.push('')
+    state.arr.pop()
+  })
+
+  assert.is(calls, 4)
+  assert.equal(snapshot(state).arr, [''])
 })
 
 test('set', () => {
