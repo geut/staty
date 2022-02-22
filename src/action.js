@@ -3,6 +3,7 @@ class Action {
     this._name = name
     this._handlers = new Set()
     this._release = release
+    this._done = false
   }
 
   valid (handler) {
@@ -17,13 +18,15 @@ class Action {
   }
 
   done () {
+    if (this._done) return
+    this._done = true
     this._handlers.forEach(handler => this._run(handler))
-    this._handlers.clear()
     this._release()
   }
 
   cancel () {
-    this._handlers.clear()
+    if (this._done) return
+    this._done = true
     this._release()
   }
 
