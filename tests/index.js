@@ -538,27 +538,6 @@ test('map convertMapItems', () => {
   assert.is(calls, 4)
 })
 
-test('map convertMapItems false', () => {
-  let calls = 0
-
-  const state = staty({
-    map: new Map([['key0', { count: 0 }]])
-  }, { convertMapItems: false })
-
-  subscribe(state, () => {
-    calls++
-  })
-
-  state.map.get('key0').count++
-  const obj = { count: 0 }
-  state.map.set('key1', obj)
-  const liveObj = state.map.get('key1')
-  liveObj.count++
-  state.map.delete('key1')
-  liveObj.count++
-  assert.is(calls, 2)
-})
-
 test('autorun', () => {
   let calls = 0
   let callsByProps = 0

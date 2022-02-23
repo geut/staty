@@ -33,7 +33,7 @@ export const configureSnapshot = ({ kStaty, log }) => {
     return obj
   }
 
-  function _snapshot (x) {
+  function _snapshot (x, mapRefs = false) {
     if (!x) return x
 
     const staty = x?.[kStaty]
@@ -43,12 +43,15 @@ export const configureSnapshot = ({ kStaty, log }) => {
     }
 
     if (staty?.isRef) {
+      if (mapRefs) return x
+
       if (staty.mapSnapshot) {
         x = staty.mapSnapshot(staty.value)
         staty.cacheSnapshot = x
         if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, x)
         return x
       }
+
       x = staty.value
     }
 
@@ -57,103 +60,39 @@ export const configureSnapshot = ({ kStaty, log }) => {
     const str = Object.prototype.toString.call(x)
 
     if (str === '[object Object]') {
-      tmp = {} // null
+      tmp = Object.create(Object.getPrototypeOf(x) || null) // null
       for (k in x) {
-        if (k === '__proto__') {
-          Object.defineProperty(tmp, k, {
-            value: _snapshot(staty?.refValue ? staty.refValue(k) : x[k]),
-            configurable: true,
-            enumerable: true,
-            writable: true
-          })
-        } else {
-          tmp[k] = _snapshot(staty?.refValue ? staty.refValue(k) : x[k])
-        }
+        tmp[k] = _snapshot(staty?.refValue ? staty.refValue(k) : x[k])
       }
-
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-
-      return tmp
-    }
-
-    if (str === '[object Array]') {
+    } else if (str === '[object Array]') {
       k = x.length
       for (tmp = Array(k); k--;) {
         tmp[k] = _snapshot(staty?.refValue ? staty.refValue(k) : x[k])
       }
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
-    }
-
-    if (str === '[object Set]') {
+    } else if (str === '[object Set]') {
       tmp = new Set()
       x.forEach(function (val) {
         tmp.add(_snapshot(val))
       })
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
-    }
-
-    if (str === '[object Map]') {
+    } else if (str === '[object Map]') {
       tmp = new Map()
       x.forEach(function (val, key) {
         tmp.set(_snapshot(key), _snapshot(val))
       })
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
-    }
-
-    if (str === '[object Date]') {
+    } else if (str === '[object Date]') {
       tmp = new Date(+x)
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
-    }
-
-    if (str === '[object RegExp]') {
+    } else if (str === '[object RegExp]') {
       tmp = new RegExp(x.source, x.flags)
       tmp.lastIndex = x.lastIndex
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
-    }
-
-    if (str === '[object DataView]') {
+    } else if (str === '[object DataView]') {
       tmp = new x.constructor(_snapshot(x.buffer))
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
-    }
-
-    if (str === '[object ArrayBuffer]') {
+    } else if (str === '[object ArrayBuffer]') {
       tmp = x.slice(0)
-      if (staty) {
-        staty.cacheSnapshot = tmp
-        if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
-      }
-      return tmp
+    } else if (str.slice(-6) === 'Array]') {
+      tmp = new x.constructor(x)
     }
 
-    if (str.slice(-6) === 'Array]') {
-      tmp = new x.constructor(x)
+    if (tmp) {
       if (staty) {
         staty.cacheSnapshot = tmp
         if (log.enabled) log('cacheSnapshot:update %s %O', staty?.prop, tmp)
@@ -164,7 +103,7 @@ export const configureSnapshot = ({ kStaty, log }) => {
     return x
   }
 
-  return function snapshot (state, prop) {
+  return function snapshot (state, prop, mapRefs = false) {
     if (Array.isArray(prop)) {
       return prop.map(p => _snapshotProp(state, p))
     }
@@ -173,6 +112,6 @@ export const configureSnapshot = ({ kStaty, log }) => {
       return _snapshotProp(state, prop)
     }
 
-    return _snapshot(state)
+    return _snapshot(state, mapRefs)
   }
 }

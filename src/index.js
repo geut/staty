@@ -148,24 +148,26 @@ const isValidForStaty = type => type === '[object Object]' || isArray(type) || i
  * @returns {Proxy}
  */
 export function staty (target, opts = {}) {
-  const { targetType = Object.prototype.toString.call(target), convertMapItems = true } = opts
+  const { targetType = Object.prototype.toString.call(target) } = opts
 
   if (!isValidForStaty(targetType)) throw new Error('the `target` is not valid for staty')
 
   const internal = new InternalStaty(target)
 
-  if (convertMapItems && isMapCollection(targetType)) {
-    const newTarget = new Map()
+  if (isMapCollection(targetType)) {
     target.forEach((val, key) => {
       const type = Object.prototype.toString.call(val)
+
       if (!val?.[kStaty] && isValidForStaty(type)) {
-        val = staty(val, { targetType: type, convertMapItems })
+        val = staty(val, { targetType: type })
       }
-      const parentProp = typeof key === 'string' ? key : kNoProp
-      val?.[kStaty]?.addParent?.(parentProp, internal)
-      newTarget.set(key, val)
+
+      if (val?.[kStaty]) {
+        const parentProp = typeof key === 'string' ? key : kNoProp
+        val?.[kStaty]?.addParent?.(parentProp, internal)
+        target.set(key, val)
+      }
     })
-    target = newTarget
   }
 
   const state = new Proxy(target, {
@@ -189,7 +191,7 @@ export function staty (target, opts = {}) {
       const type = Object.prototype.toString.call(value)
       if (isValidForStaty(type)) {
         if (!valueStaty) {
-          value = staty(value, { targetType: type, convertMapItems })
+          value = staty(value, { targetType: type })
           valueStaty = value[kStaty]
         }
         valueStaty.addParent(prop, internal)
@@ -242,8 +244,8 @@ export function staty (target, opts = {}) {
               const oldVal = target.get(key)
               if (oldVal && (oldVal === val || oldVal?.[kStaty]?.target === val)) return
               const type = Object.prototype.toString.call(val)
-              if (convertMapItems && !val?.[kStaty] && isValidForStaty(type)) {
-                val = staty(val, { targetType: type, convertMapItems })
+              if (!val?.[kStaty] && isValidForStaty(type)) {
+                val = staty(val, { targetType: type })
               }
               target.set(key, val)
               const parentProp = typeof key === 'string' ? key : kNoProp
@@ -296,7 +298,7 @@ export function staty (target, opts = {}) {
 
       const type = Object.prototype.toString.call(value)
       if (!valueStaty && isValidForStaty(type)) {
-        value = staty(value, { targetType: type, convertMapItems })
+        value = staty(value, { targetType: type })
         valueStaty = value[kStaty]
       }
 
