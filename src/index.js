@@ -1,16 +1,9 @@
 // inspired by: https://github.com/pmndrs/valtio
 
-import debug from 'debug'
-
-import { configureSnapshot } from './snapshot.js'
+import { snapshot as _snapshot } from './snapshot.js'
 import { batchHandler } from './batch.js'
 import { ActionManager } from './action.js'
-
-const log = debug('staty')
-
-const kStaty = Symbol('staty')
-const kController = Symbol('controler')
-const kNoProp = Symbol('noprop')
+import { kStaty, kController, kNoProp } from './symbols.js'
 
 const actions = new ActionManager()
 
@@ -457,8 +450,6 @@ export function action (handler, actionName) {
     action.done()
   }
 }
-
-const _snapshot = configureSnapshot({ kStaty, log })
 
 /**
  * Creates a snapshot of the state
