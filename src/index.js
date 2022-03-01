@@ -86,7 +86,7 @@ class InternalStaty {
         if (prop.startsWith(`${key}.`) || prop === key) {
           Array.from(handlers.values()).forEach(handler => {
             if (!action) {
-              this._run(handler)
+              handler.run()
               return
             }
 
@@ -100,7 +100,7 @@ class InternalStaty {
 
     Array.from(subscriptions.default.values()).forEach(handler => {
       if (!action) {
-        this._run(handler)
+        handler.run()
         return
       }
 
@@ -117,14 +117,6 @@ class InternalStaty {
           : null
       parents.forEach(parent => parent.run(parentProp))
     })
-  }
-
-  _run (handler) {
-    try {
-      handler.run()
-    } catch (err) {
-      console.error(err)
-    }
   }
 }
 
@@ -299,10 +291,9 @@ export function staty (target, opts = {}) {
         oldValueStaty?.delParent(prop, internal)
         valueStaty?.addParent(prop, internal)
         internal.run(prop)
-        return true
       }
 
-      return false
+      return true
     },
 
     deleteProperty (target, prop) {

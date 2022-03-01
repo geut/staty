@@ -9,13 +9,7 @@ export function batchHandler (handler) {
   batches.add(handler)
 
   queueMicrotask(() => {
-    batches.forEach(handler => {
-      try {
-        handler()
-      } catch (err) {
-        console.error(err)
-      }
-    })
+    batches.forEach(handler => handler())
     batches.clear()
   })
 }

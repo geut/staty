@@ -1,8 +1,8 @@
 class Action {
-  constructor (name, release) {
+  constructor (name, onRelease) {
     this._name = name
+    this._onRelease = onRelease
     this._handlers = new Set()
-    this._release = release
     this._done = false
   }
 
@@ -20,28 +20,23 @@ class Action {
   done () {
     if (this._done) return
     this._done = true
-    this._handlers.forEach(handler => this._run(handler))
-    this._release()
+    this._handlers.forEach(handler => handler.run())
+    this._onRelease()
   }
 
   cancel () {
     if (this._done) return
     this._done = true
-    this._release()
-  }
-
-  _run (handler) {
-    try {
-      handler.run()
-    } catch (err) {
-      console.error(err)
-    }
+    this._onRelease()
   }
 }
 
 export class ActionManager {
   constructor () {
     this._current = null
+    this._onRelease = () => {
+      this._current = null
+    }
   }
 
   get current () {
@@ -50,10 +45,7 @@ export class ActionManager {
 
   create (name = '_') {
     if (this._current) throw new Error('there is already an action running: ', this._current.name)
-
-    this._current = new Action(name, () => {
-      this._current = null
-    })
+    this._current = new Action(name, this._onRelease)
     return this._current
   }
 }

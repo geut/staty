@@ -69,18 +69,34 @@ test('subscription', async () => {
 })
 
 test('snapshot', () => {
-  const state = staty({
+  const date = new Date()
+  const aSet = new Set(['v0', 'v1'])
+  const aMap = new Map([['v0', 'v1'], ['k1', 'v1']])
+  const aBuffer = Buffer.from('test')
+  const obj = {
     val: 'str',
     num: 0,
     arr: [0, 1, { val: '2' }],
     inner: {
-      val: 'str'
+      date
     },
-    nul: null
-  })
+    nul: null,
+    aSet,
+    aMap,
+    regex: /regex/,
+    aBuffer
+  }
 
-  assert.equal(state, snapshot(state))
-  assert.is.not(state, snapshot(state))
+  const state = staty(snapshot(obj))
+  assert.equal(obj, snapshot(state))
+  assert.is.not(obj, snapshot(state))
+
+  // by prop
+
+  assert.is(snapshot(state, 'sub.missing.prop'), undefined)
+  assert.equal(snapshot(state, 'inner.date'), date)
+  assert.equal(snapshot(state, 'aSet'), aSet)
+  assert.equal(snapshot(state, 'aMap'), aMap)
 })
 
 test('ref', () => {
@@ -511,10 +527,13 @@ test('set', () => {
 
   const obj = staty({ count: 0 })
   state.bag.add(obj)
+  assert.is(state.bag.size, 1)
   obj.count++
   state.bag.delete(obj)
+  assert.is(state.bag.size, 0)
   obj.count++
   assert.is(calls, 3)
+  assert.equal(Array.from(state.bag.entries()), [])
 })
 
 test('map convertMapItems', () => {

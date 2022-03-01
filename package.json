@@ -14,9 +14,11 @@
     "test": "uvu",
     "posttest": "npm run lint",
     "lint": "standard",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "coverage": "c8 uvu"
   },
   "devDependencies": {
+    "c8": "^7.11.0",
     "standard": "^16.0.3",
     "uvu": "^0.5.1"
   },
