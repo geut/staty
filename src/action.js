@@ -1,6 +1,28 @@
+const isRegex = value => value.test !== undefined
+const isSymbol = value => Object.prototype.toString.call(value) === '[object Symbol]'
+
+function match (patterns, value, valueIsSymbol) {
+  patterns = Array.isArray(patterns) ? patterns : [patterns]
+
+  for (const pattern of patterns) {
+    if (valueIsSymbol) {
+      if (!isRegex(pattern) && pattern === value) return true
+    } else {
+      if (isRegex(pattern)) {
+        if (pattern.test(value)) return true
+      } else if (pattern === value) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 class Action {
   constructor (name, onRelease) {
     this._name = name
+    this._isSymbol = isSymbol(name)
     this._onRelease = onRelease
     this._handlers = new Set()
     this._done = false
@@ -8,9 +30,9 @@ class Action {
 
   valid (handler) {
     if (!handler.actionFilter) return true
-    if (handler.actionFilter.include && handler.actionFilter.include.test(this._name)) return true
-    if (handler.actionFilter.exclude && handler.actionFilter.exclude.test(this._name)) return false
-    return handler.actionFilter.test(this._name)
+    if (handler.actionFilter.include && match(handler.actionFilter.include, this._name, this._isSymbol)) return true
+    if (handler.actionFilter.exclude && match(handler.actionFilter.exclude, this._name, this._isSymbol)) return false
+    return match(handler.actionFilter, this._name, this._isSymbol)
   }
 
   add (handler) {

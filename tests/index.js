@@ -399,6 +399,30 @@ test('action names', () => {
   assert.is(calls, 1)
 })
 
+test('action filter by symbol', () => {
+  let calls = 0
+
+  const state = staty({
+    prop0: 0
+  })
+
+  const internal = Symbol('internal')
+
+  subscribe(state, () => {
+    calls++
+  }, { actionFilter: /test/ })
+
+  subscribe(state, () => {
+    calls++
+  }, { actionFilter: internal })
+
+  action(() => {
+    state.prop0++
+  }, internal)
+
+  assert.is(calls, 1)
+})
+
 test('readme', () => {
   let plan = 3
 
