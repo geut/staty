@@ -55,19 +55,19 @@ class Action {
 
 export class ActionManager {
   constructor () {
-    this._current = null
+    this._stack = []
     this._onRelease = () => {
-      this._current = null
+      this._stack.pop()
     }
   }
 
   get current () {
-    return this._current
+    return this._stack[this._stack.length - 1]
   }
 
   create (name = '_') {
-    if (this._current) throw new Error('there is already an action running: ', this._current.name)
-    this._current = new Action(name, this._onRelease)
-    return this._current
+    const action = new Action(name, this._onRelease)
+    this._stack.push(action)
+    return action
   }
 }
