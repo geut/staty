@@ -8,9 +8,9 @@ import { kStaty, kController, kNoProp } from './symbols.js'
 const actions = new ActionManager()
 
 function _subscribe (state, handler, prop, opts = {}) {
-  const { actionFilter = null } = opts
+  const { filter = null } = opts
 
-  handler = { run: handler, actionFilter }
+  handler = { run: handler, filter }
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -358,10 +358,10 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  const { filter: prop, batch = false, actionFilter, autorun = false } = opts
+  const { props, batch = false, filter, autorun = false } = opts
 
   const subscribeProps = {
-    actionFilter
+    filter
   }
 
   if (batch) {
@@ -370,22 +370,22 @@ export function subscribe (state, handler, opts = {}) {
   }
 
   let dispose
-  if (!prop) {
+  if (!props) {
     dispose = _subscribe(state, handler, null, subscribeProps)
     if (autorun) handler()
     return dispose
   }
 
-  if (!Array.isArray(prop)) {
+  if (!Array.isArray(props)) {
     dispose = _subscribe(state, () => {
       return handler()
-    }, prop, subscribeProps)
+    }, props, subscribeProps)
     if (autorun) handler()
     return dispose
   }
 
   let scheduled = false
-  const unsubscribes = prop.map(prop => {
+  const unsubscribes = props.map(prop => {
     return _subscribe(state, () => {
       if (!batch) return handler()
 

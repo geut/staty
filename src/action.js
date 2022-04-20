@@ -29,10 +29,10 @@ class Action {
   }
 
   valid (handler) {
-    if (!handler.actionFilter) return true
-    if (handler.actionFilter.include && match(handler.actionFilter.include, this._name, this._isSymbol)) return true
-    if (handler.actionFilter.exclude && match(handler.actionFilter.exclude, this._name, this._isSymbol)) return false
-    return match(handler.actionFilter, this._name, this._isSymbol)
+    if (!handler.filter) return true
+    if (handler.filter.include && match(handler.filter.include, this._name, this._isSymbol)) return true
+    if (handler.filter.exclude && match(handler.filter.exclude, this._name, this._isSymbol)) return false
+    return match(handler.filter, this._name, this._isSymbol)
   }
 
   add (handler) {

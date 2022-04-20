@@ -40,7 +40,7 @@ test('subscription', async () => {
   subscribe(state.inner, () => {
     calls['inner.val']++
   }, {
-    filter: 'val'
+    props: 'val'
   })
 
   subscribe(state.arr, () => {
@@ -50,7 +50,7 @@ test('subscription', async () => {
   subscribe(state.arr[2], () => {
     calls['arr.val']++
   }, {
-    filter: 'val'
+    props: 'val'
   })
 
   state.inner.val = 'change'
@@ -185,7 +185,7 @@ test('subscribe by prop arrays', () => {
     calls++
     lastSnapshot = snapshot(state, ['num0', 'num1', 'arr'])
   }, {
-    filter: ['num0', 'num1', 'arr']
+    props: ['num0', 'num1', 'arr']
   })
 
   state.num0++
@@ -212,7 +212,7 @@ test('subscribe missing prop', () => {
   subscribe(state, () => {
     calls++
   }, {
-    filter: 'metadata.missing'
+    props: 'metadata.missing'
   })
 
   state.metadata.missing = 'change'
@@ -255,7 +255,7 @@ test('compare references', () => {
   subscribe(state, () => {
     calls++
   }, {
-    filter: 'val'
+    props: 'val'
   })
 
   state.val = {}
@@ -282,15 +282,15 @@ test('unsubscribe', () => {
 
   unsubscribe.push(subscribe(state, () => {
     calls++
-  }, { filter: 'prop0' }))
+  }, { props: 'prop0' }))
 
   unsubscribe.push(subscribe(state, () => {
     calls++
-  }, { filter: 'prop1.prop2' }))
+  }, { props: 'prop1.prop2' }))
 
   unsubscribe.push(subscribe(state, () => {
     calls++
-  }, { filter: ['prop0', 'prop1.prop2'] }))
+  }, { props: ['prop0', 'prop1.prop2'] }))
 
   unsubscribe.push(subscribe(state.prop1.prop3[0], () => {
     calls++
@@ -323,7 +323,7 @@ test('delete key', () => {
 
   subscribe(state, () => {
     calls++
-  }, { filter: 'inner' })
+  }, { props: 'inner' })
 
   delete state.inner
 
@@ -343,7 +343,7 @@ test('unparent', () => {
 
   subscribe(state, () => {
     calls++
-  }, { filter: 'inner' })
+  }, { props: 'inner' })
 
   state.inner = {}
   state.inner.name = 'test'
@@ -386,17 +386,25 @@ test('action names', () => {
 
   subscribe(state, () => {
     calls++
-  }, { actionFilter: { exclude: /internal/ } })
+  }, { filter: { exclude: /internal/ } })
 
   subscribe(state, () => {
     calls++
-  }, { actionFilter: /internal/ })
+  }, { filter: /internal/ })
+
+  subscribe(state, () => {
+    calls++
+  }, { filter: 'action-string' })
 
   action(() => {
     state.prop0++
   }, 'internal')
 
-  assert.is(calls, 1)
+  action(() => {
+    state.prop0++
+  }, 'action-string')
+
+  assert.is(calls, 2)
 })
 
 test('action filter by symbol', () => {
@@ -410,11 +418,11 @@ test('action filter by symbol', () => {
 
   subscribe(state, () => {
     calls++
-  }, { actionFilter: /test/ })
+  }, { filter: /test/ })
 
   subscribe(state, () => {
     calls++
-  }, { actionFilter: internal })
+  }, { filter: internal })
 
   action(() => {
     state.prop0++
@@ -438,11 +446,11 @@ test('readme', () => {
 
   subscribe(state, () => {
     plan--
-  }, { filter: 'count' })
+  }, { props: 'count' })
 
   subscribe(state, () => {
     plan--
-  }, { filter: ['count'] })
+  }, { props: ['count'] })
 
   state.count++
   assert.is(plan, 0)
@@ -474,11 +482,11 @@ test('batch', async () => {
 
   subscribe(state, () => {
     calls.innerCount++
-  }, { filter: 'inner.count', batch: true })
+  }, { props: 'inner.count', batch: true })
 
   subscribe(state, () => {
     calls.multiple++
-  }, { filter: ['count', 'inner.count'], batch: true })
+  }, { props: ['count', 'inner.count'], batch: true })
 
   state.count++
   state.inner.count++
@@ -596,7 +604,7 @@ test('autorun', () => {
 
   subscribe(state, () => {
     callsByProps++
-  }, { filter: ['count'], autorun: true })
+  }, { props: ['count'], autorun: true })
 
   state.count++
   state.text = 'change'

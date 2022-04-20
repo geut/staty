@@ -30,12 +30,12 @@ subscribe(state, () => {
 
 subscribe(state, () => {
   console.log(state.count) // 1
-}, { filter: 'count' })
+}, { props: 'count' })
 
 // filter multiple values
 subscribe(state, () => {
   console.log(state.count) // 1
-}, { filter: ['count'] })
+}, { props: ['count'] })
 
 state.count++
 ```
