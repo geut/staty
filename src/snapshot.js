@@ -1,7 +1,7 @@
 // based on https://github.com/lukeed/klona
-import { kStaty } from './symbols.js'
+import { kStaty, kEmpty } from './symbols.js'
 
-function snapshotProp (state, prop) {
+function snapshotProp (state, prop, disableCache) {
   const value = dlv(state, prop)
 
   if (!value || typeof value !== 'object') {
@@ -9,10 +9,10 @@ function snapshotProp (state, prop) {
   }
 
   if (value[kStaty]) {
-    return clone(value)
+    return clone(value, disableCache)
   }
 
-  return dlv(clone(state), prop)
+  return dlv(clone(state, disableCache), prop)
 }
 
 function dlv (obj, key) {
@@ -33,17 +33,19 @@ function dlv (obj, key) {
   return obj
 }
 
-function clone (x, mapRefs = false) {
+function clone (x, disableCache) {
   if (!x) return x
 
   const staty = x?.[kStaty]
-  if (staty && staty.cacheSnapshot) {
-    return staty.cacheSnapshot
+  if (staty && staty.cacheSnapshot !== kEmpty) {
+    if (disableCache === undefined) {
+      if (!staty.disableCache) return staty.cacheSnapshot
+    } else {
+      if (!disableCache) return staty.cacheSnapshot
+    }
   }
 
   if (staty?.isRef) {
-    if (mapRefs) return x
-
     if (staty.mapSnapshot) {
       x = staty.mapSnapshot(staty.value)
       staty.cacheSnapshot = x
@@ -60,22 +62,22 @@ function clone (x, mapRefs = false) {
   if (str === '[object Object]') {
     tmp = Object.create(Object.getPrototypeOf(x) || null) // null
     for (k in x) {
-      tmp[k] = clone(staty?.refValue ? staty.refValue(k) : x[k])
+      tmp[k] = clone(staty?.refValue ? staty.refValue(k) : x[k], disableCache)
     }
   } else if (str === '[object Array]') {
     k = x.length
     for (tmp = Array(k); k--;) {
-      tmp[k] = clone(staty?.refValue ? staty.refValue(k) : x[k])
+      tmp[k] = clone(staty?.refValue ? staty.refValue(k) : x[k], disableCache)
     }
   } else if (str === '[object Set]') {
     tmp = new Set()
     x.forEach(function (val) {
-      tmp.add(clone(val))
+      tmp.add(clone(val, disableCache))
     })
   } else if (str === '[object Map]') {
     tmp = new Map()
     x.forEach(function (val, key) {
-      tmp.set(clone(key), clone(val))
+      tmp.set(clone(key, disableCache), clone(val, disableCache))
     })
   } else if (str === '[object Date]') {
     tmp = new Date(+x)
@@ -83,7 +85,7 @@ function clone (x, mapRefs = false) {
     tmp = new RegExp(x.source, x.flags)
     tmp.lastIndex = x.lastIndex
   } else if (str === '[object DataView]') {
-    tmp = new x.constructor(clone(x.buffer))
+    tmp = new x.constructor(clone(x.buffer, disableCache))
   } else if (str === '[object ArrayBuffer]') {
     tmp = x.slice(0)
   } else if (str.slice(-6) === 'Array]') {
@@ -100,14 +102,14 @@ function clone (x, mapRefs = false) {
   return x
 }
 
-export function snapshot (state, prop, mapRefs = false) {
+export function snapshot (state, prop, disableCache) {
   if (Array.isArray(prop)) {
-    return prop.map(p => snapshotProp(state, p))
+    return prop.map(p => snapshotProp(state, p, disableCache))
   }
 
   if (typeof prop === 'string') {
-    return snapshotProp(state, prop)
+    return snapshotProp(state, prop, disableCache)
   }
 
-  return clone(state, mapRefs)
+  return clone(state, disableCache)
 }

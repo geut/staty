@@ -169,6 +169,24 @@ test('cache snapshot', () => {
   assert.is(snap2, snapshot(state))
 })
 
+test('disable cache snapshot', () => {
+  const state = staty({
+    val: 0,
+    inner: {}
+  }, { disableCache: true })
+
+  const snap = snapshot(state)
+  assert.is.not(snap, snapshot(state))
+
+  state.val = 1
+
+  const snap2 = snapshot(state)
+  assert.is.not(snap, snap2)
+  assert.is.not(snap.inner, snap2.inner)
+  assert.is.not(snap2, snapshot(state))
+  assert.is(snapshot(state, null, false), snapshot(state, null, false))
+})
+
 test('subscribe by prop arrays', () => {
   let calls = 0
 

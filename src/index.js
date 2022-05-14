@@ -3,7 +3,7 @@
 import { snapshot as _snapshot } from './snapshot.js'
 import { batchHandler } from './batch.js'
 import { ActionManager } from './action.js'
-import { kStaty, kController, kNoProp } from './symbols.js'
+import { kStaty, kController, kNoProp, kEmpty } from './symbols.js'
 
 const actions = new ActionManager()
 
@@ -37,14 +37,15 @@ function _subscribe (state, handler, prop, opts = {}) {
  */
 
 class InternalStaty {
-  constructor (target) {
+  constructor (target, disableCache = false) {
     this.target = target
     this.subscriptions = {
       default: new Set(),
       props: new Map()
     }
-    this.cacheSnapshot = null
+    this.cacheSnapshot = kEmpty
     this.propsBinded = new Map()
+    this.disableCache = disableCache
     this.refValue = this.refValue.bind(this)
   }
 
@@ -77,7 +78,7 @@ class InternalStaty {
 
   run (prop) {
     const subscriptions = this.subscriptions
-    this.cacheSnapshot = null
+    this.cacheSnapshot = kEmpty
 
     const action = actions.current
 
@@ -130,21 +131,22 @@ const isValidForStaty = type => type === '[object Object]' || isArray(type) || i
  *
  * @param {*} target
  * @param {Object} [opts]
+ * @param {boolean} [opts.disableCache=false] disable cache for snapshots
  * @returns {Proxy}
  */
 export function staty (target, opts = {}) {
-  const { targetType = Object.prototype.toString.call(target) } = opts
+  const { targetType = Object.prototype.toString.call(target), disableCache = false } = opts
 
   if (!isValidForStaty(targetType)) throw new Error('the `target` is not valid for staty')
 
-  const internal = new InternalStaty(target)
+  const internal = new InternalStaty(target, disableCache)
 
   if (isMapCollection(targetType)) {
     target.forEach((val, key) => {
       const type = Object.prototype.toString.call(val)
 
       if (!val?.[kStaty] && isValidForStaty(type)) {
-        val = staty(val, { targetType: type })
+        val = staty(val, { targetType: type, disableCache })
       }
 
       if (val?.[kStaty]) {
@@ -176,7 +178,7 @@ export function staty (target, opts = {}) {
       const type = Object.prototype.toString.call(value)
       if (isValidForStaty(type)) {
         if (!valueStaty) {
-          value = staty(value, { targetType: type })
+          value = staty(value, { targetType: type, disableCache })
           valueStaty = value[kStaty]
         }
         valueStaty.addParent(prop, internal)
@@ -230,7 +232,7 @@ export function staty (target, opts = {}) {
               if (oldVal && (oldVal === val || oldVal?.[kStaty]?.target === val)) return
               const type = Object.prototype.toString.call(val)
               if (!val?.[kStaty] && isValidForStaty(type)) {
-                val = staty(val, { targetType: type })
+                val = staty(val, { targetType: type, disableCache })
               }
               target.set(key, val)
               const parentProp = typeof key === 'string' ? key : kNoProp
@@ -283,7 +285,7 @@ export function staty (target, opts = {}) {
 
       const type = Object.prototype.toString.call(value)
       if (!valueStaty && isValidForStaty(type)) {
-        value = staty(value, { targetType: type })
+        value = staty(value, { targetType: type, disableCache })
         valueStaty = value[kStaty]
       }
 
@@ -408,13 +410,15 @@ export function subscribe (state, handler, opts = {}) {
  *
  * @param {*} value
  * @param {(ref: *) => *} [mapSnapshot]
+ * @param {boolean} [disableCache=false] disable cache for snapshots
  * @returns {{ __ref: * }}
  */
-export function ref (value, mapSnapshot) {
+export function ref (value, mapSnapshot, disableCache = false) {
   const internal = {
     isRef: true,
-    cacheSnapshot: null,
+    cacheSnapshot: kEmpty,
     mapSnapshot,
+    disableCache,
     value
   }
 
@@ -447,8 +451,9 @@ export function action (handler, actionName) {
  *
  * @param {Proxy} state
  * @param {(String|Array<String>)} [prop]
+ * @param {boolean} [disableCache] disable cache for snapshots
  * @returns {Object}
  */
-export function snapshot (state, prop) {
-  return _snapshot(state, prop)
+export function snapshot (state, prop, disableCache) {
+  return _snapshot(state, prop, disableCache)
 }
