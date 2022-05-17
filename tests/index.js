@@ -404,15 +404,21 @@ test('action names', () => {
 
   subscribe(state, () => {
     calls++
-  }, { filter: { exclude: /internal/ } })
+  }, {
+    filter: name => !/internal/.test(name)
+  })
 
   subscribe(state, () => {
     calls++
-  }, { filter: /internal/ })
+  }, {
+    filter: name => /internal/.test(name)
+  })
 
   subscribe(state, () => {
     calls++
-  }, { filter: 'action-string' })
+  }, {
+    filter: name => name === 'action-string'
+  })
 
   action(() => {
     state.prop0++
@@ -422,31 +428,7 @@ test('action names', () => {
     state.prop0++
   }, 'action-string')
 
-  assert.is(calls, 2)
-})
-
-test('action filter by symbol', () => {
-  let calls = 0
-
-  const state = staty({
-    prop0: 0
-  })
-
-  const internal = Symbol('internal')
-
-  subscribe(state, () => {
-    calls++
-  }, { filter: /test/ })
-
-  subscribe(state, () => {
-    calls++
-  }, { filter: internal })
-
-  action(() => {
-    state.prop0++
-  }, internal)
-
-  assert.is(calls, 1)
+  assert.is(calls, 3)
 })
 
 test('readme', () => {

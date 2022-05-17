@@ -360,8 +360,12 @@ export function listeners (state) {
  * Subscribe for changes in the state
  *
  * @param {Proxy} state
- * @param {function} handler
- * @param {Object} opts
+ * @param {() => void} handler
+ * @param {Object} [opts]
+ * @param {string|string[]} [opts.props] props to subscribe
+ * @param {boolean} [opts.batch=false] execute in batch turning the subscription into async
+ * @param {(actionName: string) => boolean} [opts.filter] subscribe only for specific action names
+ * @param {boolean} [opts.autorun] run immediately
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {

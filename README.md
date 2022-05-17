@@ -62,8 +62,12 @@ Get subscription listeners count
 Subscribe for changes in the state
 
 - `state: any`
-- `handler: Function`
-- `opts?: any = {}`
+- `handler: () => void`
+- `opts?: Object = {}`
+  - `props?: string | string[]` props to subscribe
+  - `batch?: boolean = false` execute in batch turning the subscription into async
+  - `filter?: (actionName: string) => boolean` subscribe only for specific action names
+  - `autorun?: boolean` run immediately
 
 #### `ref(value, mapSnapshot?, disableCache?) => any`
 
