@@ -102,6 +102,14 @@ function clone (x, disableCache) {
   return x
 }
 
+/**
+ * Creates a snapshot of the state
+ *
+ * @param {Proxy} state
+ * @param {(String|Array<String>)} [prop]
+ * @param {boolean} [disableCache] disable cache for snapshots
+ * @returns {Object}
+ */
 export function snapshot (state, prop, disableCache) {
   if (Array.isArray(prop)) {
     return prop.map(p => snapshotProp(state, p, disableCache))

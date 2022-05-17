@@ -1,9 +1,10 @@
 // inspired by: https://github.com/pmndrs/valtio
 
-import { snapshot as _snapshot } from './snapshot.js'
 import { batchHandler } from './batch.js'
 import { ActionManager } from './action.js'
 import { kStaty, kController, kNoProp, kEmpty } from './symbols.js'
+
+export { snapshot } from './snapshot.js'
 
 const actions = new ActionManager()
 
@@ -317,10 +318,14 @@ export function staty (target, opts = {}) {
 }
 
 /**
+ * @typedef {{ listeners: { default: Number, props: Object }, count }} ListenersReport
+ */
+
+/**
  * Get subscription listeners count
  *
  * @param {Proxy} state
- * @returns {{ listeners: { default: Number, props: Object }, count }}
+ * @returns {ListenersReport}
  */
 export function listeners (state) {
   if (!state[kStaty]) throw new Error('state is not valid')
@@ -411,7 +416,7 @@ export function subscribe (state, handler, opts = {}) {
  * @param {*} value
  * @param {(ref: *) => *} [mapSnapshot]
  * @param {boolean} [disableCache=false] disable cache for snapshots
- * @returns {{ __ref: * }}
+ * @returns {Proxy}
  */
 export function ref (value, mapSnapshot, disableCache = false) {
   const internal = {
@@ -444,16 +449,4 @@ export function action (handler, actionName) {
   } finally {
     action.done()
   }
-}
-
-/**
- * Creates a snapshot of the state
- *
- * @param {Proxy} state
- * @param {(String|Array<String>)} [prop]
- * @param {boolean} [disableCache] disable cache for snapshots
- * @returns {Object}
- */
-export function snapshot (state, prop, disableCache) {
-  return _snapshot(state, prop, disableCache)
 }
