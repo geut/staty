@@ -49,7 +49,8 @@ try {
   console.log(err) // => ups
 }
 
-state.count // => 1 (rollback to last good state)
+// rollback to the last good state and subscriptions won't be trigger it
+state.count // => 1
 ```
 
 ## API
