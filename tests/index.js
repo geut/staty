@@ -99,6 +99,64 @@ test('snapshot', () => {
   assert.equal(snapshot(state, 'aMap'), aMap)
 })
 
+test('snapshot cache inside subscription', () => {
+  const state = staty({
+    inc: 0
+  })
+
+  subscribe(state, () => {
+    assert.is(snapshot(state), snapshot(state))
+  })
+
+  state.inc++
+})
+
+test('subscription error', () => {
+  let onErrorCalls = 0
+
+  const state = staty({
+    inc: 0
+  })
+
+  subscribe(state, () => {
+    throw new Error('test0')
+  }, {
+    onError: () => {
+      onErrorCalls++
+    }
+  })
+
+  const unsubscribe = subscribe(state, () => {
+    throw new Error('test1')
+  }, {
+    before: true,
+    onError: () => {
+      onErrorCalls++
+    }
+  })
+
+  try {
+    state.inc++
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test1')
+  }
+
+  assert.is(state.inc, 0)
+  assert.is(onErrorCalls, 0)
+  unsubscribe()
+
+  try {
+    state.inc++
+  } catch (err) {
+    assert.unreachable('should not have thrown')
+  }
+
+  assert.is(state.inc, 1)
+  assert.is(onErrorCalls, 1)
+})
+
 test('ref', () => {
   const state = staty({
     val: 'str',

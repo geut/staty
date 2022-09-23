@@ -439,20 +439,42 @@ export function listeners (state) {
  * @param {() => void} handler
  * @param {Object} [opts]
  * @param {string|string[]} [opts.props] props to subscribe
- * @param {boolean} [opts.batch=false] execute in batch turning the subscription into async
  * @param {(actionName: string) => boolean} [opts.filter] subscribe only for specific action names
+ * @param {boolean} [opts.batch=false] execute in batch turning the subscription into async
  * @param {boolean} [opts.autorun=false] run immediately
  * @param {boolean} [opts.before=false] run before finish the action. A good place to validate changes
+ * @param {(error: Error) => void} [opts.onError] error handler subscription. Works only with before=false
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  const { props, batch = false, filter, autorun = false, before = false } = opts
+  const {
+    props,
+    filter,
+    batch = false,
+    autorun = false,
+    before = false,
+    onError = (err) => {
+      console.warn(err)
+    }
+  } = opts
 
   if (batch && before) throw new Error('batch=true with before=true is not possible')
+  if (autorun && before) throw new Error('autorun=true with before=true is not possible')
 
   const subscribeProps = {
     filter,
     before
+  }
+
+  if (!before) {
+    const prevHandler = handler
+    handler = () => {
+      try {
+        prevHandler()
+      } catch (err) {
+        onError(err)
+      }
+    }
   }
 
   if (batch) {
@@ -463,7 +485,7 @@ export function subscribe (state, handler, opts = {}) {
   let dispose
   if (!props) {
     dispose = _subscribe(state, handler, null, subscribeProps)
-    if (autorun) action(() => handler())
+    if (autorun) handler()
     return dispose
   }
 
@@ -471,7 +493,7 @@ export function subscribe (state, handler, opts = {}) {
     dispose = _subscribe(state, () => {
       return handler()
     }, props, subscribeProps)
-    if (autorun) action(() => handler())
+    if (autorun) handler()
     return dispose
   }
 
@@ -490,7 +512,7 @@ export function subscribe (state, handler, opts = {}) {
     }, prop, subscribeProps)
   })
 
-  if (autorun) action(() => handler())
+  if (autorun) handler()
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
 }
 

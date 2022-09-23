@@ -79,10 +79,11 @@ Subscribe for changes in the state
 - `handler: () => void`
 - `opts?: Object = {}`
   - `props?: string | string[]` props to subscribe
-  - `batch?: boolean = false` execute in batch turning the subscription into async
   - `filter?: (actionName: string) => boolean` subscribe only for specific action names
-  - `autorun?: boolean` run immediately
-  - `before?: boolean` run before the other subscriptions and after the action finish. Good place to validate your state.
+  - `batch?: boolean = false` execute in batch turning the subscription into async. **Required before=false**
+  - `autorun?: boolean` run immediately. **Required before=false**
+  - `before?: boolean` run before the other subscriptions and after the action finish. Good place to validate your state.  **Required batch=false && autorun=false**
+  - `onError?: (error: Error) => void` error handler subscription. **Required before=false**
 
 #### `ref(value, mapSnapshot?, disableCache?) => any`
 

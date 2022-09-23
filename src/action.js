@@ -32,10 +32,17 @@ class Action {
 
   done () {
     if (this._done) return
-    this._beforeHandlers.forEach(handler => handler.run())
+
+    try {
+      this._beforeHandlers.forEach(handler => handler.run())
+    } catch (err) {
+      this.cancel()
+      throw err
+    }
+
     this._done = true
-    this._handlers.forEach(handler => handler.run())
     this._onRelease()
+    this._handlers.forEach(handler => handler.run())
   }
 
   cancel () {
