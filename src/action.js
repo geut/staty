@@ -2,8 +2,19 @@ class Action {
   constructor (name, onRelease) {
     this._name = name
     this._onRelease = onRelease
+    this._beforeHandlers = new Set()
     this._handlers = new Set()
     this._done = false
+    this._inRollback = false
+    this._history = []
+  }
+
+  get name () {
+    return this._name
+  }
+
+  get inRollback () {
+    return this._inRollback
   }
 
   valid (handler) {
@@ -12,11 +23,16 @@ class Action {
   }
 
   add (handler) {
-    this._handlers.add(handler)
+    if (handler.before) {
+      this._beforeHandlers.add(handler)
+    } else {
+      this._handlers.add(handler)
+    }
   }
 
   done () {
     if (this._done) return
+    this._beforeHandlers.forEach(handler => handler.run())
     this._done = true
     this._handlers.forEach(handler => handler.run())
     this._onRelease()
@@ -24,8 +40,18 @@ class Action {
 
   cancel () {
     if (this._done) return
+    this._inRollback = true
+    for (let i = this._history.length - 1; i >= 0; i--) {
+      this._history[i]()
+    }
+    this._history = []
+    this._inRollback = false
     this._done = true
     this._onRelease()
+  }
+
+  pushHistory (rollback) {
+    this._history.push(rollback)
   }
 }
 

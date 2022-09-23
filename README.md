@@ -1,6 +1,6 @@
 # staty
 
-Build a proxy-state from plain objects
+Build a proxy-state from plain objects. With automatic rollback to previous state in case of errors.
 
 ![Test Status](https://github.com/geut/staty/actions/workflows/test.yml/badge.svg)
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
@@ -10,33 +10,46 @@ Build a proxy-state from plain objects
 
 ## Install
 
-    $ npm install @geut/staty
+```bash
+$ npm install @geut/staty
+```
 
 ## Usage
 
 ```javascript
-import { staty, subscribe, snapshot } from '@geut/staty'
+import { staty, subscribe, snapshot, action } from '@geut/staty'
 
 const state = staty({
   count: 0
 })
 
-console.log(snapshot(state)) // { count: 0 }
+console.log(snapshot(state)) // => { count: 0 }
 
 subscribe(state, () => {
-  console.log(state) // { count: 1 }
+  console.log(state) // => { count: 1 }
 })
 
 subscribe(state, () => {
-  console.log(state.count) // 1
+  console.log(state.count) // => 1
 }, { props: 'count' })
 
 // filter multiple values
 subscribe(state, () => {
-  console.log(state.count) // 1
+  console.log(state.count) // => 1
 }, { props: ['count'] })
 
 state.count++
+
+try {
+  action(() => {
+    state.count = 100
+    throw new Error('ups')
+  })
+} catch (err) {
+  console.log(err) // => ups
+}
+
+state.count // => 1 (rollback to last good state)
 ```
 
 ## API
@@ -68,6 +81,7 @@ Subscribe for changes in the state
   - `batch?: boolean = false` execute in batch turning the subscription into async
   - `filter?: (actionName: string) => boolean` subscribe only for specific action names
   - `autorun?: boolean` run immediately
+  - `before?: boolean` run before the other subscriptions and after the action finish. Good place to validate your state.
 
 #### `ref(value, mapSnapshot?, disableCache?) => any`
 

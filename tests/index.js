@@ -632,4 +632,134 @@ test('action cancel', () => {
   assert.is(calls, 0)
 })
 
+test('action rollback', () => {
+  let calls = 0
+
+  const date = new Date()
+
+  const state = staty({
+    inc: 0,
+    substate: {
+      name: 'tincho'
+    },
+    arr: ['value0', 'value1', { val: 0 }],
+    map: new Map([['key0', 'val0']]),
+    set: new Set(['val0']),
+    date: ref(date, val => val.toISOString())
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  try {
+    action(() => {
+      state.inc++
+      state.inc++
+      state.newProp = 'hello'
+      state.substate.name = 'test'
+      state.substate2 = {
+        subchange: 'helo'
+      }
+      state.substate2.subchange = 'has different'
+      state.arr.push('value2')
+      state.arr[2].val = 2
+      state.map.set('key1', 'val1')
+      state.map.delete('key0')
+      state.set.add('val1')
+      state.set.delete('val0')
+      const date = new Date()
+      state.date = date
+
+      assert.equal(snapshot(state), {
+        inc: 2,
+        substate: { name: 'test' },
+        arr: ['value0', 'value1', { val: 2 }, 'value2'],
+        map: new Map([
+          ['key1', 'val1']
+        ]),
+        set: new Set(['val1']),
+        newProp: 'hello',
+        substate2: { subchange: 'has different' },
+        date: date.toISOString()
+      })
+
+      delete state.date
+      state.arr = ['new array']
+
+      assert.equal(snapshot(state), {
+        inc: 2,
+        substate: { name: 'test' },
+        arr: ['new array'],
+        map: new Map([
+          ['key1', 'val1']
+        ]),
+        set: new Set(['val1']),
+        newProp: 'hello',
+        substate2: { subchange: 'has different' }
+      })
+
+      state.arr.push('item1')
+      state.arr.push('item2')
+      state.arr.splice(0, 1)
+
+      assert.equal(snapshot(state), {
+        inc: 2,
+        substate: { name: 'test' },
+        arr: ['item1', 'item2'],
+        map: new Map([
+          ['key1', 'val1']
+        ]),
+        set: new Set(['val1']),
+        newProp: 'hello',
+        substate2: { subchange: 'has different' }
+      })
+
+      throw new Error('test')
+    })
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test')
+  }
+
+  assert.is(calls, 0)
+  assert.equal(snapshot(state), {
+    inc: 0,
+    substate: {
+      name: 'tincho'
+    },
+    arr: ['value0', 'value1', { val: 0 }],
+    map: new Map([['key0', 'val0']]),
+    set: new Set(['val0']),
+    date: date.toISOString()
+  })
+})
+
+test('subscribe before', () => {
+  let calls = 0
+
+  const state = staty({
+    inc: 0
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  subscribe(state, () => {
+    if (state.inc === 1) throw new Error('cannot increase inc')
+  }, { before: true })
+
+  try {
+    state.inc++
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'cannot increase inc')
+  }
+
+  assert.is(calls, 0)
+})
+
 test.run()

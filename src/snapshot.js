@@ -48,7 +48,9 @@ function clone (x, disableCache) {
   if (staty?.isRef) {
     if (staty.mapSnapshot) {
       x = staty.mapSnapshot(staty.value)
-      staty.cacheSnapshot = x
+      if (!disableCache) {
+        staty.cacheSnapshot = x
+      }
       return x
     }
 
@@ -93,7 +95,7 @@ function clone (x, disableCache) {
   }
 
   if (tmp) {
-    if (staty) {
+    if (staty && !disableCache) {
       staty.cacheSnapshot = tmp
     }
     return tmp
