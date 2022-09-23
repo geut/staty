@@ -442,11 +442,13 @@ export function listeners (state) {
  * @param {boolean} [opts.batch=false] execute in batch turning the subscription into async
  * @param {(actionName: string) => boolean} [opts.filter] subscribe only for specific action names
  * @param {boolean} [opts.autorun=false] run immediately
- * @param {boolean} [opts.before=false] run before finish the action. A good place to validate changes.
+ * @param {boolean} [opts.before=false] run before finish the action. A good place to validate changes
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
   const { props, batch = false, filter, autorun = false, before = false } = opts
+
+  if (batch && before) throw new Error('batch=true with before=true is not possible')
 
   const subscribeProps = {
     filter,
@@ -461,7 +463,7 @@ export function subscribe (state, handler, opts = {}) {
   let dispose
   if (!props) {
     dispose = _subscribe(state, handler, null, subscribeProps)
-    if (autorun) handler()
+    if (autorun) action(() => handler())
     return dispose
   }
 
@@ -469,7 +471,7 @@ export function subscribe (state, handler, opts = {}) {
     dispose = _subscribe(state, () => {
       return handler()
     }, props, subscribeProps)
-    if (autorun) handler()
+    if (autorun) action(() => handler())
     return dispose
   }
 
@@ -488,7 +490,7 @@ export function subscribe (state, handler, opts = {}) {
     }, prop, subscribeProps)
   })
 
-  if (autorun) handler()
+  if (autorun) action(() => handler())
   return () => unsubscribes.forEach(unsubscribe => unsubscribe())
 }
 
