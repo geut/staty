@@ -80,6 +80,10 @@ class InternalStaty {
 
   run (prop, rollback) {
     let action = actions.current
+    if (action?.inRollback) return
+
+    this.cacheSnapshot = kEmpty
+
     let actionInitiator = false
     if (rollback && (!action || action.name === kInternalAction)) {
       action = actions.create(kInternalAction)
@@ -87,12 +91,9 @@ class InternalStaty {
     }
 
     try {
-      if (action.inRollback) return
-
       if (rollback) action.pushHistory(rollback)
 
       const subscriptions = this.subscriptions
-      this.cacheSnapshot = kEmpty
 
       if (prop) {
         for (const [key, handlers] of subscriptions.props.entries()) {
@@ -308,10 +309,13 @@ export function staty (target, opts = {}) {
         if (oldValue === value || oldValueStaty.value === value) return true
         if ((!value || !valueStaty?.isRef)) {
           const oldRealValue = oldValueStaty.value
+          const oldCacheRefSnapshot = oldValueStaty.cacheSnapshot
           oldValueStaty.value = value
+          oldValueStaty.cacheSnapshot = kEmpty
           internal.run(prop, () => {
             internal.cacheSnapshot = cacheSnapshot
             oldValueStaty.value = oldRealValue
+            oldValueStaty.cacheSnapshot = oldCacheRefSnapshot
           })
         }
         return true

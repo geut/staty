@@ -820,4 +820,16 @@ test('subscribe before', () => {
   assert.is(calls, 0)
 })
 
+test('fix issue where ref cache is not updated', () => {
+  const state = staty({
+    ref: ref('test', (val) => val)
+  })
+
+  state.ref = 'change'
+  assert.equal(snapshot(state), { ref: 'change' }) // cache generated
+  assert.is(snapshot(state), snapshot(state)) // from cache
+  state.ref = 'change2' // it should clear the cache
+  assert.equal(snapshot(state), { ref: 'change2' })
+})
+
 test.run()
