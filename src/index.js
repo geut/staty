@@ -1,13 +1,13 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 import { batchHandler } from './batch.js'
-import { ActionManager } from './action.js'
-import { kStaty, kController, kNoProp, kEmpty } from './symbols.js'
-import { snapshot as getSnapshot } from './snapshot.js'
-
-const actions = new ActionManager()
-
-const kInternalAction = Symbol('internalAction')
+import { kStaty, isObject, isArray, isMap, isSet } from './constants.js'
+import { clone } from './clone.js'
+import { ObjectStaty } from './types/object.js'
+import { ArrayStaty } from './types/array.js'
+import { MapStaty } from './types/map.js'
+import { SetStaty } from './types/set.js'
+import { RefStaty } from './types/ref.js'
 
 function _subscribe (state, handler, prop, opts = {}) {
   const { filter = null, before = false } = opts
@@ -34,297 +34,41 @@ function _subscribe (state, handler, prop, opts = {}) {
   }
 }
 
-/**
- * @callback UnsubscribeFunction
- */
-
-class InternalStaty {
-  constructor (target, disableCache = false) {
-    this.target = target
-    this.subscriptions = {
-      default: new Set(),
-      props: new Map()
-    }
-    this.cacheSnapshot = kEmpty
-    this.propsBinded = new Map()
-    this.disableCache = disableCache
-    this.refValue = this.refValue.bind(this)
-  }
-
-  addParent (prop, parent) {
-    let parents
-    if (this.propsBinded.has(prop)) {
-      parents = this.propsBinded.get(prop)
-    } else {
-      parents = new Set()
-      this.propsBinded.set(prop, parents)
-    }
-
-    parents.add(parent)
-  }
-
-  delParent (prop, parent) {
-    if (!this.propsBinded.has(prop)) return
-    const parents = this.propsBinded.get(prop)
-    parents.delete(parent)
-    if (parents.size === 0) this.propsBinded.delete(prop)
-  }
-
-  refValue (prop) {
-    if (this.target?.[prop]?.[kStaty]?.isRef) {
-      return this.target?.[prop]
-    }
-
-    return this.proxy[prop]
-  }
-
-  run (prop, rollback) {
-    let action = actions.current
-    if (action?.inRollback) return
-
-    this.cacheSnapshot = kEmpty
-
-    let actionInitiator = false
-    if (rollback && (!action || action.name === kInternalAction)) {
-      action = actions.create(kInternalAction)
-      actionInitiator = true
-    }
-
-    try {
-      if (rollback) action.pushHistory(rollback)
-
-      const subscriptions = this.subscriptions
-
-      if (prop) {
-        for (const [key, handlers] of subscriptions.props.entries()) {
-          if (prop.startsWith(`${key}.`) || prop === key) {
-            Array.from(handlers.values()).forEach(handler => {
-              if (action.valid(handler)) {
-                action.add(handler)
-              }
-            })
-          }
-        }
-      }
-
-      Array.from(subscriptions.default.values()).forEach(handler => {
-        if (action.valid(handler)) {
-          action.add(handler)
-        }
-      })
-
-      this.propsBinded.forEach((parents, propBinded) => {
-        const parentProp = prop && propBinded !== kNoProp
-          ? `${propBinded}.${prop}`
-          : propBinded !== kNoProp
-            ? propBinded
-            : null
-        parents.forEach(parent => parent.run(parentProp))
-      })
-    } catch (err) {
-      actionInitiator && action.cancel()
-      throw err
-    } finally {
-      actionInitiator && action.done()
-    }
-  }
-}
-
-const isArray = type => type === '[object Array]'
-const isSetCollection = type => type === '[object Set]'
-const isMapCollection = type => type === '[object Map]'
-const isValidForStaty = type => type === '[object Object]' || isArray(type) || isSetCollection(type) || isMapCollection(type)
-
-/**
- * Creates a new proxy-state
- *
- * @param {*} target
- * @param {Object} [opts]
- * @param {boolean} [opts.disableCache=false] disable cache for snapshots
- * @returns {Proxy}
- */
-export function staty (target, opts = {}) {
-  const { targetType = Object.prototype.toString.call(target), disableCache = false } = opts
-
-  if (!isValidForStaty(targetType)) throw new Error('the `target` is not valid for staty')
-
-  const internal = new InternalStaty(target, disableCache)
-
-  if (isMapCollection(targetType)) {
-    target.forEach((val, key) => {
-      const type = Object.prototype.toString.call(val)
-
-      if (!val?.[kStaty] && isValidForStaty(type)) {
-        val = staty(val, { targetType: type, disableCache })
-      }
-
-      if (val?.[kStaty]) {
-        const parentProp = typeof key === 'string' ? key : kNoProp
-        val?.[kStaty]?.addParent?.(parentProp, internal)
-        target.set(key, val)
-      }
-    })
-  }
-
+function _createProxy (target, internal) {
   const state = new Proxy(target, {
     get (target, prop) {
       if (prop === kStaty) return internal
-      if (prop === kController) return internal.controller
-
-      if (!(Reflect.has(target, prop))) return
-
-      let value = Reflect.get(target, prop)
-
+      const value = Reflect.get(target, prop)
       if (value === null || value === undefined) return value
 
-      let valueStaty = value?.[kStaty]
+      const valueStaty = value?.[kStaty]
 
-      // ref
       if (valueStaty?.isRef) {
         return valueStaty.value
       }
 
-      const type = Object.prototype.toString.call(value)
-      if (isValidForStaty(type)) {
-        if (!valueStaty) {
-          value = staty(value, { targetType: type, disableCache })
-          valueStaty = value[kStaty]
-        }
-        valueStaty.addParent(prop, internal)
-        Reflect.set(target, prop, value)
-        return value
-      }
-
-      if (type === '[object Function]') {
-        if (isArray(targetType) && ['splice', 'unshift', 'push', 'pop', 'shift', 'reverse', 'sort'].includes(prop)) {
-          if (!internal.patched) {
-            internal.patched = true
-            return (...args) => {
-              if (actions.current) {
-                state[prop](...args)
-              } else {
-                action(() => {
-                  state[prop](...args)
-                })
-              }
-            }
-          }
-          internal.patched = false
-          return value
-        }
-
-        if (isSetCollection(targetType)) {
-          if (prop === 'add') {
-            return (val) => {
-              if (target.has(val)) return
-              target.add(val)
-              val?.[kStaty]?.addParent?.(kNoProp, internal)
-              const oldCache = internal.cacheSnapshot
-              const prevStaty = val?.[kStaty]
-              internal.run(null, () => {
-                internal.cacheSnapshot = oldCache
-                target.delete(val)
-                prevStaty?.delParent?.(kNoProp, internal)
-              })
-            }
-          }
-
-          if (prop === 'delete') {
-            return (val) => {
-              if (!target.delete(val)) return
-              val?.[kStaty]?.delParent?.(kNoProp, internal)
-              const oldCache = internal.cacheSnapshot
-              const prevStaty = val?.[kStaty]
-              internal.run(null, () => {
-                internal.cacheSnapshot = oldCache
-                target.add(val)
-                prevStaty?.addParent?.(kNoProp, internal)
-              })
-            }
-          }
-
-          return value.bind(target)
-        }
-
-        if (isMapCollection(targetType)) {
-          if (prop === 'set') {
-            return (key, val) => {
-              const oldVal = target.get(key)
-              if (oldVal && (oldVal === val || oldVal?.[kStaty]?.target === val)) return
-              const type = Object.prototype.toString.call(val)
-              if (!val?.[kStaty] && isValidForStaty(type)) {
-                val = staty(val, { targetType: type, disableCache })
-              }
-              target.set(key, val)
-              const parentProp = typeof key === 'string' ? key : kNoProp
-              oldVal?.[kStaty]?.delParent?.(parentProp, internal)
-              val?.[kStaty]?.addParent?.(parentProp, internal)
-
-              const oldCache = internal.cacheSnapshot
-              const prevStaty = {
-                oldVal: oldVal?.[kStaty],
-                val: val?.[kStaty]
-              }
-              internal.run(key, () => {
-                internal.cacheSnapshot = oldCache
-                target.delete(key)
-                prevStaty.oldVal?.addParent?.(parentProp, internal)
-                prevStaty.val?.delParent?.(parentProp, internal)
-              })
-            }
-          }
-
-          if (prop === 'delete') {
-            return (key) => {
-              const val = target.get(key)
-              if (!target.delete(key)) return
-              const parentProp = typeof key === 'string' ? key : kNoProp
-              val?.[kStaty]?.delParent?.(parentProp, internal)
-
-              const oldCache = internal.cacheSnapshot
-              const prevStaty = val?.[kStaty]
-              internal.run(key, () => {
-                internal.cacheSnapshot = oldCache
-                target.set(key, val)
-                prevStaty?.addParent?.(parentProp, internal)
-              })
-            }
-          }
-
-          return value.bind(target)
-        }
-      }
-
-      return value
+      return internal.handler(value, prop)
     },
     set (target, prop, value) {
-      const cacheSnapshot = internal.cacheSnapshot
       const newProp = !Reflect.has(target, prop)
       const oldValue = Reflect.get(target, prop)
       const oldValueStaty = oldValue?.[kStaty]
       let valueStaty = value?.[kStaty]
 
       // start ref support
-      if (oldValueStaty?.isRef) {
+      if (oldValueStaty?.isRef && !valueStaty?.isRef) {
         if (oldValue === value || oldValueStaty.value === value) return true
-        if ((!value || !valueStaty?.isRef)) {
-          const oldRealValue = oldValueStaty.value
-          const oldCacheRefSnapshot = oldValueStaty.cacheSnapshot
-          oldValueStaty.value = value
-          oldValueStaty.cacheSnapshot = kEmpty
-          internal.run(prop, () => {
-            internal.cacheSnapshot = cacheSnapshot
-            oldValueStaty.value = oldRealValue
-            oldValueStaty.cacheSnapshot = oldCacheRefSnapshot
-          })
-        }
+        const oldRawValue = oldValueStaty.value
+        oldValueStaty.setValue(value)
+        internal.run(prop, () => {
+          internal.clearSnapshot()
+          oldValueStaty.setValue(oldRawValue)
+        })
         return true
-      }
-
-      if (valueStaty?.isRef) {
+      } else if (valueStaty?.isRef) {
         if (Reflect.set(target, prop, value)) {
           internal.run(prop, () => {
-            internal.cacheSnapshot = cacheSnapshot
+            internal.clearSnapshot()
             if (newProp) return Reflect.deleteProperty(target, prop)
             Reflect.set(target, prop, oldValue)
           })
@@ -336,8 +80,8 @@ export function staty (target, opts = {}) {
       if (oldValue === value) return true
 
       const type = Object.prototype.toString.call(value)
-      if (!valueStaty && isValidForStaty(type)) {
-        value = staty(value, { targetType: type, disableCache })
+      if (!valueStaty && (type === isObject || type === isArray || type === isMap || type === isSet)) {
+        value = staty(value, { targetType: type, onReadOnly: internal.onReadOnly, onErrorSubscription: internal.onErrorSubscription })
         valueStaty = value[kStaty]
       }
 
@@ -348,7 +92,7 @@ export function staty (target, opts = {}) {
         }
 
         internal.run(prop, () => {
-          internal.cacheSnapshot = cacheSnapshot
+          internal.clearSnapshot()
 
           if (oldValueStaty !== valueStaty) {
             valueStaty?.delParent(prop, internal)
@@ -373,28 +117,66 @@ export function staty (target, opts = {}) {
     },
 
     deleteProperty (target, prop) {
-      if (!Reflect.has(target, prop)) return
+      if (!Reflect.has(target, prop)) return true
 
-      const cacheSnapshot = internal.cacheSnapshot
       const oldValue = Reflect.get(target, prop)
       oldValue?.[kStaty]?.delParent?.(prop, internal)
 
       if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
-      if (!(prop in target)) return false
       if (Reflect.deleteProperty(target, prop)) {
         internal.run(prop, () => {
-          internal.cacheSnapshot = cacheSnapshot
+          internal.clearSnapshot()
           oldValue?.[kStaty]?.addParent?.(prop, internal)
           Reflect.set(target, prop, oldValue)
         })
-        return true
       }
+      return true
     }
   })
 
   internal.proxy = state
 
   return state
+}
+
+/**
+ * Creates a new proxy-state
+ *
+ * @param {*} target
+ * @param {object} [opts]
+ * @param {() => {}} [opts.onReadOnly]
+ * @param {(err) => {}} [opts.onErrorSubscription]
+ * @returns {Proxy}
+ */
+export function staty (target, opts = {}) {
+  const {
+    targetType = Object.prototype.toString.call(target),
+    onReadOnly = (target, prop, value) => {
+      console.warn('snapshots are readonly', { target, prop, value })
+    },
+    onErrorSubscription = err => console.warn(err)
+  } = opts
+
+  if (target?.[kStaty]) return target
+
+  let InternalClass
+
+  if (targetType === isObject) {
+    InternalClass = ObjectStaty
+  } else if (targetType === isArray) {
+    InternalClass = ArrayStaty
+  } else if (targetType === isMap) {
+    InternalClass = MapStaty
+  } else if (targetType === isSet) {
+    InternalClass = SetStaty
+  }
+
+  if (!InternalClass) throw new Error('the `target` is not valid for staty')
+
+  return clone(target, (val, type, parent) => {
+    if (target === parent) return _createProxy(val, new InternalClass(val, { onReadOnly, onErrorSubscription }))
+    return staty(val, { targetType: type, onReadOnly, onErrorSubscription })
+  })
 }
 
 /**
@@ -408,7 +190,7 @@ export function staty (target, opts = {}) {
  * @returns {ListenersReport}
  */
 export function listeners (state) {
-  if (!state[kStaty]) throw new Error('state is not valid')
+  if (!state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -451,15 +233,15 @@ export function listeners (state) {
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
+  if (!state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
+
   const {
     props,
     filter,
     batch = false,
     autorun = false,
     before = false,
-    onError = (err) => {
-      console.warn(err)
-    }
+    onError = state[kStaty].onErrorSubscription
   } = opts
 
   if (batch && before) throw new Error('batch=true with before=true is not possible')
@@ -525,54 +307,36 @@ export function subscribe (state, handler, opts = {}) {
  *
  * @param {*} value
  * @param {(ref: *) => *} [mapSnapshot]
- * @param {boolean} [disableCache=false] disable cache for snapshots
+ * @param {boolean} [cache] enable cache
  * @returns {Proxy}
  */
-export function ref (value, mapSnapshot, disableCache = false) {
-  const internal = {
-    isRef: true,
-    cacheSnapshot: kEmpty,
-    mapSnapshot,
-    disableCache,
-    value
-  }
+export function ref (value, mapSnapshot, cache) {
+  const internal = new RefStaty(value, mapSnapshot, cache)
 
-  const obj = new Proxy({}, {
+  const obj = new Proxy(internal, {
     get (_, prop) {
       if (prop === kStaty) return internal
+      if (typeof internal.value[prop] === 'function') return (...args) => internal.value[prop](...args)
       return internal.value[prop]
+    },
+    getOwnPropertyDescriptor (_, prop) {
+      try {
+        return Reflect.getOwnPropertyDescriptor(internal.value, prop)
+      } catch (err) {
+        return undefined
+      }
+    },
+    ownKeys () {
+      try {
+        return Reflect.ownKeys(internal.value)
+      } catch (err) {
+        return []
+      }
     }
   })
 
   return obj
 }
 
-/**
- * Create a action
- * @param {function} handler
- * @param {string} actionName
- */
-export function action (handler, actionName) {
-  const action = actions.create(actionName)
-  try {
-    handler(() => action.cancel())
-  } catch (err) {
-    action.cancel()
-    throw err
-  } finally {
-    action.done()
-  }
-}
-
-/**
- * Creates a snapshot of the state
- *
- * @param {Proxy} state
- * @param {(String|Array<String>)} [prop]
- * @param {boolean} [disableCache] disable cache for snapshots
- * @returns {Object}
- */
-export function snapshot (state, prop, disableCache) {
-  disableCache = !!actions.current || disableCache
-  return getSnapshot(state, prop, disableCache)
-}
+export { snapshot } from './snapshot.js'
+export { action } from './action.js'

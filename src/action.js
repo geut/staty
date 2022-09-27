@@ -80,3 +80,22 @@ export class ActionManager {
     return action
   }
 }
+
+export const actions = new ActionManager()
+
+/**
+ * Create a action
+ * @param {function} handler
+ * @param {string} actionName
+ */
+export function action (handler, actionName) {
+  const action = actions.create(actionName)
+  try {
+    handler(() => action.cancel())
+  } catch (err) {
+    action.cancel()
+    throw err
+  } finally {
+    action.done()
+  }
+}

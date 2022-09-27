@@ -63,7 +63,8 @@ Creates a new proxy-state
 
 - `target: any`
 - `opts?: Object = {}`
-  - `disableCache?: boolean = false` disable cache for snapshots
+  - `onErrorSubscription?: (err: Error) => {}` global handle for error subscriptions
+  - `onReadOnly?: (target: any, prop: any, value: any) => {}` global handle for readonly snapshot errors
 
 #### `listeners(state) => ListenersReport`
 
@@ -85,13 +86,13 @@ Subscribe for changes in the state
   - `before?: boolean` run before the other subscriptions and after the action finish. Good place to validate your state.  **Required batch=false && autorun=false**
   - `onError?: (error: Error) => void` error handler subscription. **Required before=false**
 
-#### `ref(value, mapSnapshot?, disableCache?) => any`
+#### `ref(value, mapSnapshot?, cache?) => any`
 
 Add a ref to another object
 
 - `value: any`
 - `mapSnapshot?: (ref: any) => any`
-- `disableCache?: boolean = false` disable cache for snapshots
+- `cache?: boolean = false` enable cache for snapshots
 
 #### `action(handler, actionName) => void`
 
@@ -100,13 +101,12 @@ Create a action
 - `handler: Function`
 - `actionName: string`
 
-#### `snapshot(state, prop?, disableCache?) => any`
+#### `snapshot(state, prop?) => any`
 
 Creates a snapshot of the state
 
 - `state: any`
 - `prop?: (string | Array<string>)`
-- `disableCache?: boolean` disable cache for snapshots
 
 ## Issues
 

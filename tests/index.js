@@ -2,9 +2,25 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 import util from 'util'
 
+import { actions } from '../src/action.js'
 import { staty, subscribe, snapshot, ref, listeners, action } from '../src/index.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
+
+test('staty return staty', () => {
+  const state = staty({})
+  assert.is(state, staty(state))
+})
+
+test('valid staty', () => {
+  try {
+    staty(true)
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'the `target` is not valid for staty')
+  }
+})
 
 test('subscription', async () => {
   const state = staty({
@@ -73,6 +89,9 @@ test('snapshot', () => {
   const aSet = new Set(['v0', 'v1'])
   const aMap = new Map([['v0', 'v1'], ['k1', 'v1']])
   const aBuffer = Buffer.from('test')
+  const aArrayBuffer = new ArrayBuffer(2)
+  const aDataView = new DataView(aArrayBuffer)
+
   const obj = {
     val: 'str',
     num: 0,
@@ -84,10 +103,12 @@ test('snapshot', () => {
     aSet,
     aMap,
     regex: /regex/,
-    aBuffer
+    aBuffer,
+    aArrayBuffer,
+    aDataView
   }
 
-  const state = staty(snapshot(obj))
+  const state = staty(obj)
   assert.equal(obj, snapshot(state))
   assert.is.not(obj, snapshot(state))
 
@@ -116,6 +137,14 @@ test('subscription error', () => {
 
   const state = staty({
     inc: 0
+  }, {
+    onErrorSubscription () {
+      onErrorCalls++
+    }
+  })
+
+  subscribe(state, () => {
+    throw new Error('test0')
   })
 
   subscribe(state, () => {
@@ -154,7 +183,24 @@ test('subscription error', () => {
   }
 
   assert.is(state.inc, 1)
-  assert.is(onErrorCalls, 1)
+  assert.is(onErrorCalls, 2)
+
+  const warn = console.warn.bind(console)
+  console.warn = () => {
+    onErrorCalls++
+  }
+
+  const def = staty({})
+
+  subscribe(def, () => {
+    throw new Error('test')
+  })
+
+  def.change = 0
+
+  console.warn = warn
+  assert.is(def.change, 0)
+  assert.is(onErrorCalls, 3)
 })
 
 test('ref', () => {
@@ -184,6 +230,16 @@ test('ref', () => {
     },
     external: { val: 'external' }
   })
+
+  assert.equal(Object.keys(ref({ val: '0' })), ['val'])
+  assert.equal(Object.keys(ref(true)), [])
+  assert.equal(Reflect.getOwnPropertyDescriptor(ref({ val: '0' }), 'val'), {
+    value: '0',
+    writable: true,
+    enumerable: true,
+    configurable: true
+  })
+  assert.equal(Reflect.getOwnPropertyDescriptor(ref(true), 'val'), undefined)
 })
 
 test('recursive updates', () => {
@@ -225,24 +281,6 @@ test('cache snapshot', () => {
   assert.is.not(snap, snap2)
   assert.is(snap.inner, snap2.inner)
   assert.is(snap2, snapshot(state))
-})
-
-test('disable cache snapshot', () => {
-  const state = staty({
-    val: 0,
-    inner: {}
-  }, { disableCache: true })
-
-  const snap = snapshot(state)
-  assert.is.not(snap, snapshot(state))
-
-  state.val = 1
-
-  const snap2 = snapshot(state)
-  assert.is.not(snap, snap2)
-  assert.is.not(snap.inner, snap2.inner)
-  assert.is.not(snap2, snapshot(state))
-  assert.is(snapshot(state, null, false), snapshot(state, null, false))
 })
 
 test('subscribe by prop arrays', () => {
@@ -626,27 +664,6 @@ test('set', () => {
   assert.equal(Array.from(state.bag.entries()), [])
 })
 
-test('map convertMapItems', () => {
-  let calls = 0
-
-  const state = staty({
-    map: new Map([['key0', { count: 0 }]])
-  })
-
-  subscribe(state, () => {
-    calls++
-  })
-
-  state.map.get('key0').count++
-  const obj = { count: 0 }
-  state.map.set('key1', obj)
-  const liveObj = state.map.get('key1')
-  liveObj.count++
-  state.map.delete('key1')
-  liveObj.count++
-  assert.is(calls, 4)
-})
-
 test('autorun', () => {
   let calls = 0
   let callsByProps = 0
@@ -703,7 +720,11 @@ test('action rollback', () => {
     arr: ['value0', 'value1', { val: 0 }],
     map: new Map([['key0', 'val0']]),
     set: new Set(['val0']),
-    date: ref(date, val => val.toISOString())
+    date: ref(date, val => val.toISOString()),
+    ref: ref({ value: 'ref' }),
+    staty: staty({
+      title: 'test'
+    })
   })
 
   subscribe(state, () => {
@@ -739,7 +760,11 @@ test('action rollback', () => {
         set: new Set(['val1']),
         newProp: 'hello',
         substate2: { subchange: 'has different' },
-        date: date.toISOString()
+        date: date.toISOString(),
+        ref: { value: 'ref' },
+        staty: {
+          title: 'test'
+        }
       })
 
       delete state.date
@@ -754,7 +779,11 @@ test('action rollback', () => {
         ]),
         set: new Set(['val1']),
         newProp: 'hello',
-        substate2: { subchange: 'has different' }
+        substate2: { subchange: 'has different' },
+        ref: { value: 'ref' },
+        staty: {
+          title: 'test'
+        }
       })
 
       state.arr.push('item1')
@@ -770,7 +799,52 @@ test('action rollback', () => {
         ]),
         set: new Set(['val1']),
         newProp: 'hello',
-        substate2: { subchange: 'has different' }
+        substate2: { subchange: 'has different' },
+        ref: { value: 'ref' },
+        staty: {
+          title: 'test'
+        }
+      })
+
+      const newref = { other: 'newref' }
+      state.ref = ref(newref)
+      state.staty = staty({
+        other: 'state'
+      })
+
+      assert.equal(snapshot(state), {
+        inc: 2,
+        substate: { name: 'test' },
+        arr: ['item1', 'item2'],
+        map: new Map([
+          ['key1', 'val1']
+        ]),
+        set: new Set(['val1']),
+        newProp: 'hello',
+        substate2: { subchange: 'has different' },
+        ref: { other: 'newref' },
+        staty: {
+          other: 'state'
+        }
+      })
+
+      state.ref = newref
+      state.newref = ref(newref)
+      delete state.staty
+      delete state.ignore
+
+      assert.equal(snapshot(state), {
+        inc: 2,
+        substate: { name: 'test' },
+        arr: ['item1', 'item2'],
+        map: new Map([
+          ['key1', 'val1']
+        ]),
+        set: new Set(['val1']),
+        newProp: 'hello',
+        substate2: { subchange: 'has different' },
+        ref: { other: 'newref' },
+        newref: { other: 'newref' }
       })
 
       throw new Error('test')
@@ -790,8 +864,51 @@ test('action rollback', () => {
     arr: ['value0', 'value1', { val: 0 }],
     map: new Map([['key0', 'val0']]),
     set: new Set(['val0']),
-    date: date.toISOString()
+    date: date.toISOString(),
+    ref: { value: 'ref' },
+    staty: {
+      title: 'test'
+    }
   })
+})
+
+test('atomic rollback', () => {
+  const state = staty({
+    inc: 0
+  })
+
+  subscribe(state, () => {
+    if (state.inc === 1) {
+      throw new Error('global')
+    }
+  }, {
+    before: true
+  })
+
+  subscribe(state, () => {
+    if (state.inc === 2) {
+      throw new Error('prop')
+    }
+  }, {
+    before: true,
+    props: 'inc'
+  })
+
+  try {
+    state.inc = 1
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'global')
+  }
+
+  try {
+    state.inc = 2
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'prop')
+  }
 })
 
 test('subscribe before', () => {
@@ -822,14 +939,271 @@ test('subscribe before', () => {
 
 test('fix issue where ref cache is not updated', () => {
   const state = staty({
-    ref: ref('test', (val) => val)
+    ref: ref('test', (val) => ({ val }))
   })
 
   state.ref = 'change'
-  assert.equal(snapshot(state), { ref: 'change' }) // cache generated
+  assert.equal(snapshot(state), { ref: { val: 'change' } }) // cache generated
   assert.is(snapshot(state), snapshot(state)) // from cache
   state.ref = 'change2' // it should clear the cache
-  assert.equal(snapshot(state), { ref: 'change2' })
+  assert.equal(snapshot(state), { ref: { val: 'change2' } })
+})
+
+test('release action on unhandle error', async () => {
+  const state = staty({
+    inc: 0
+  }, {
+    onErrorSubscription (err) {
+      throw err
+    }
+  })
+
+  try {
+    subscribe(state, () => {
+      throw new Error('test')
+    })
+
+    state.inc++
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test')
+    assert.is(actions.current, undefined)
+  }
+})
+
+test('not override snapshots', () => {
+  const calls = []
+
+  const state = staty({
+    inc: 0,
+    inner: {
+      readonly: true
+    },
+    arr: [1, 2],
+    map: new Map(),
+    set: new Set(),
+    ref: ref({ val: 'test' })
+  }, {
+    onReadOnly (_, prop) {
+      calls.push(prop)
+    }
+  })
+
+  const snap = snapshot(state)
+
+  snap.inc++
+  snap.inner.readonly = false
+  snap.arr.push(3)
+  snap.map.set('key', 'val')
+  snap.set.add('val')
+  snap.ref.val = 'i can change'
+  assert.equal(snap.ref, { val: 'i can change' })
+
+  const warn = console.warn.bind(console)
+  console.warn = () => {
+    calls.push('global')
+  }
+  snapshot(staty({})).change = true
+  console.warn = warn
+  assert.equal(calls, ['inc', 'readonly', 'push', 'set', 'add', 'global'])
+})
+
+test('map collections', () => {
+  let calls = 0
+
+  const state = staty({
+    map: new Map()
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  state.map.set(0, 'test')
+  state.map.set(0, 'test') // should not do anything
+  state.map.delete(0)
+  state.map.delete(0) // should not do anything
+  const inner = {
+    val: 0
+  }
+  state.map.set('inner', inner)
+  state.map.set('inner', inner) // should not do anything
+  state.map.get('inner').val++
+  state.map.delete('inner')
+  state.map.set('inner', staty({
+    val: 0
+  }))
+  state.map.get('inner').val++
+  state.map.delete('inner')
+
+  assert.is(state.map.size, 0)
+
+  state.map.set(0, 'test')
+  state.map.set(1, 'test')
+  state.map.set('2', 'test')
+
+  assert.is(state.map.size, 3)
+  state.map.clear()
+  assert.is(state.map.size, 0)
+
+  state.map.set(0, 'test')
+  state.map.set(1, 'test')
+  state.map.set('2', 'test')
+
+  assert.is(state.map.size, 3)
+  action(() => {
+    state.map.clear()
+  })
+  assert.is(state.map.size, 0)
+
+  assert.is(calls, 16)
+})
+
+test('set collections', () => {
+  let calls = 0
+
+  const state = staty({
+    set: new Set()
+  })
+
+  subscribe(state, () => {
+    calls++
+  })
+
+  state.set.delete('test') // should not do anything
+  state.set.add('test')
+  state.set.delete('test')
+  let inner = {
+    val: 0
+  }
+  state.set.add(inner)
+  state.set.add(inner) // duplicate should not do anything
+  state.set.values().next().value.val++
+  state.set.delete(inner)
+  inner = staty({
+    val: 0
+  })
+  state.set.add(inner)
+  inner.val++
+  state.set.delete(inner)
+  assert.is(state.set.size, 0)
+
+  state.set.add(0)
+  state.set.add(0) // duplicate should not do anything
+  state.set.add(1)
+  state.set.add('2')
+
+  assert.is(state.set.size, 3)
+  state.set.clear()
+  assert.is(state.set.size, 0)
+
+  state.set.add(0)
+  state.set.add(1)
+  state.set.add('2')
+
+  assert.is(state.set.size, 3)
+  action(() => {
+    state.set.clear()
+  })
+  assert.is(state.set.size, 0)
+
+  assert.is(calls, 16)
+})
+
+test('rollback with map collections', () => {
+  const state = staty({
+    map: new Map()
+  })
+
+  const inner = {
+    val: 'test'
+  }
+
+  state.map.set('inner', inner)
+
+  subscribe(state, () => {
+    throw new Error('test')
+  }, {
+    before: true
+  })
+
+  try {
+    state.map.delete('inner')
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test')
+    assert.is(state.map.size, 1)
+  }
+
+  try {
+    state.map.set('inner', { other: 'val' })
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test')
+    assert.is(state.map.size, 1)
+  }
+})
+
+test('rollback with set collections', () => {
+  const state = staty({
+    set: new Set()
+  })
+
+  const inner = {
+    val: 'test'
+  }
+
+  state.set.add(inner)
+
+  subscribe(state, () => {
+    throw new Error('test')
+  }, {
+    before: true
+  })
+
+  try {
+    state.set.delete(inner)
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test')
+    assert.is(state.set.size, 1)
+  }
+
+  try {
+    state.set.add({ other: 'val' })
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'test')
+    assert.is(state.set.size, 1)
+  }
+})
+
+test('ref cache snapshot', () => {
+  const state = staty({
+    ref: ref('test', null, true),
+    refWithMap: ref('test', (val) => ({ val }), true)
+  })
+
+  assert.equal(snapshot(state), {
+    ref: 'test',
+    refWithMap: {
+      val: 'test'
+    }
+  })
+})
+
+test('valid only staty snapshot', () => {
+  try {
+    snapshot({})
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+  }
 })
 
 test.run()
