@@ -34,7 +34,7 @@ class Action {
     if (this._done) return
 
     try {
-      this._beforeHandlers.forEach(handler => handler.run())
+      this._beforeHandlers.forEach(handler => handler.run(this._name))
     } catch (err) {
       this.cancel()
       throw err
@@ -42,7 +42,7 @@ class Action {
 
     this._done = true
     this._onRelease()
-    this._handlers.forEach(handler => handler.run())
+    this._handlers.forEach(handler => handler.run(this._name))
   }
 
   cancel () {

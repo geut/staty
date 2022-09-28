@@ -66,6 +66,7 @@ Creates a new proxy-state
 - `opts?: Object = {}`
   - `onErrorSubscription?: (err: Error) => {}` global handle for error subscriptions
   - `onReadOnly?: (target: any, prop: any, value: any) => {}` global handle for readonly snapshot errors
+  - `onAction?: (state: Proxy, actionName: any) => {}` global subscription to run before every action. Create a state is also an action so it will run on every staty({}) call.
 
 #### `listeners(state) => ListenersReport`
 

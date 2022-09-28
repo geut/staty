@@ -17,10 +17,16 @@ export const rawValue = (value) => {
 }
 
 export class InternalStaty {
-  constructor (target, { onReadOnly, onErrorSubscription }) {
+  constructor (target, { onReadOnly, onErrorSubscription, onAction }) {
     this.target = target
     this.onReadOnly = onReadOnly
     this.onErrorSubscription = onErrorSubscription
+    if (onAction) {
+      this.onAction = {
+        run: actionName => onAction(this.proxy, actionName),
+        before: true
+      }
+    }
     this.subscriptions = {
       default: new Set(),
       props: new Map()
@@ -110,6 +116,10 @@ export class InternalStaty {
 
     try {
       if (rollback) action.pushHistory(rollback)
+
+      if (this.onAction) {
+        action.add(this.onAction)
+      }
 
       const subscriptions = this.subscriptions
 

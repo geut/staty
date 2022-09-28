@@ -144,8 +144,9 @@ function _createProxy (target, internal) {
  *
  * @param {*} target
  * @param {object} [opts]
- * @param {() => {}} [opts.onReadOnly]
- * @param {(err) => {}} [opts.onErrorSubscription]
+ * @param {(target: any, prop: any, value: any) => {}} [opts.onReadOnly]
+ * @param {(err: Error) => {}} [opts.onErrorSubscription]
+ * @param {(state: Proxy) => {}} [opts.onAction]
  * @returns {Proxy}
  */
 export function staty (target, opts = {}) {
@@ -154,7 +155,8 @@ export function staty (target, opts = {}) {
     onReadOnly = (target, prop, value) => {
       console.warn('snapshots are readonly', { target, prop, value })
     },
-    onErrorSubscription = err => console.warn(err)
+    onErrorSubscription = err => console.warn(err),
+    onAction
   } = opts
 
   if (target?.[kStaty]) return target
@@ -173,10 +175,14 @@ export function staty (target, opts = {}) {
 
   if (!InternalClass) throw new Error('the `target` is not valid for staty')
 
-  return clone(target, (val, type, parent) => {
-    if (target === parent) return _createProxy(val, new InternalClass(val, { onReadOnly, onErrorSubscription }))
+  const state = clone(target, (val, type, parent) => {
+    if (target === parent) return _createProxy(val, new InternalClass(val, { onReadOnly, onErrorSubscription, onAction }))
     return staty(val, { targetType: type, onReadOnly, onErrorSubscription })
   })
+
+  if (onAction) onAction(state)
+
+  return state
 }
 
 /**

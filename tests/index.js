@@ -4,6 +4,7 @@ import util from 'util'
 
 import { actions } from '../src/action.js'
 import { staty, subscribe, snapshot, ref, listeners, action } from '../src/index.js'
+import { kInternalAction } from '../src/constants.js'
 
 const macroTask = () => new Promise(resolve => setTimeout(resolve, 1))
 
@@ -1213,6 +1214,49 @@ test('valid only staty snapshot', () => {
     assert.unreachable('should have thrown')
   } catch (err) {
     assert.instance(err, Error)
+  }
+})
+
+test('onAction option', () => {
+  let onActionState
+
+  let state = staty({}, {
+    onAction: (state) => {
+      onActionState = state
+    }
+  })
+  assert.is(state, onActionState)
+
+  try {
+    staty({}, {
+      onAction: () => {
+        throw new Error('test')
+      }
+    })
+
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+  }
+
+  try {
+    state = staty({
+      inc: 0
+    }, {
+      onAction: (state, actionName) => {
+        if (snapshot(state).inc === 2) {
+          assert.is(actionName, kInternalAction)
+          throw new Error('inc=2')
+        }
+      }
+    })
+
+    state.inc++
+    state.inc++
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.instance(err, Error)
+    assert.is(err.message, 'inc=2')
   }
 })
 

@@ -1,7 +1,8 @@
 {
   "reporter": [
     "html",
-    "json-summary"
+    "json-summary",
+    "text"
   ],
   "lines": 95,
   "branches": "82",
