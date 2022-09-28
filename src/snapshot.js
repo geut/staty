@@ -4,8 +4,9 @@ import { kStaty } from './constants.js'
 function snapshotProp (state, prop) {
   const value = dlv(state, prop)
 
-  if (value?.[kStaty]) {
-    return value[kStaty].snapshot
+  const staty = value?.[kStaty]
+  if (staty) {
+    return staty.getSnapshot()
   }
 
   return value

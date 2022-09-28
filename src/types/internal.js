@@ -51,6 +51,10 @@ export class InternalStaty {
     return snapshot
   }
 
+  getSnapshot () {
+    return this.snapshot
+  }
+
   onGetSnapshot (target, prop, value) {
     return value
   }

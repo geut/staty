@@ -240,6 +240,16 @@ test('ref', () => {
     configurable: true
   })
   assert.equal(Reflect.getOwnPropertyDescriptor(ref(true), 'val'), undefined)
+
+  const r = ref({
+    id: 'id',
+    hello () {
+      return 'hello'
+    }
+  })
+
+  assert.is(r.id, 'id')
+  assert.is(r.hello(), 'hello')
 })
 
 test('recursive updates', () => {
