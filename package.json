@@ -15,10 +15,12 @@
     "posttest": "npm run lint",
     "lint": "standard",
     "prepublishOnly": "npm test",
-    "coverage": "c8 uvu"
+    "coverage": "c8 uvu",
+    "make-badge": "coverage-badges"
   },
   "devDependencies": {
     "c8": "^7.11.0",
+    "coverage-badges": "^1.0.7",
     "nanobench": "^3.0.0",
     "standard": "^17.0.0",
     "uvu": "^0.5.1"

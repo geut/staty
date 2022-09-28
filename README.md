@@ -3,6 +3,7 @@
 Build a proxy-state from plain objects. With automatic rollback to previous state in case of errors.
 
 ![Test Status](https://github.com/geut/staty/actions/workflows/test.yml/badge.svg)
+[![Coverage](https://raw.githubusercontent.com/geut/staty/gh-pages/badges/coverage.svg?raw=true)](https://geut.github.io/staty/)
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 

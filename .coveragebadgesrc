@@ -1,0 +1,5 @@
+{
+  "source": "./coverage/coverage-summary.json",
+  "attribute": "total.statements.pct",
+  "outputDir": "./coverage/badges"
+}
