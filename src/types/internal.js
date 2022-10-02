@@ -57,6 +57,13 @@ export class InternalStaty {
     return snapshot
   }
 
+  getValueByProp (prop) {
+    const value = Reflect.get(this.target, prop)
+    const staty = value?.[kStaty]
+    if (staty && staty.isRef) return staty.getSnapshot()
+    return value
+  }
+
   getSnapshot () {
     return this.snapshot
   }

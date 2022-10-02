@@ -16,8 +16,13 @@ function dlv (obj, key) {
   let p
   for (p = 0; p < key.length; p++) {
     if (obj) {
+      const staty = obj?.[kStaty]
       const k = key[p]
-      obj = obj[k]
+      if (staty) {
+        obj = staty.getValueByProp(k)
+      } else {
+        obj = obj[k]
+      }
     } else {
       return obj
     }

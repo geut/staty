@@ -119,6 +119,7 @@ test('snapshot', () => {
   assert.equal(snapshot(state, 'inner.date'), date)
   assert.equal(snapshot(state, 'aSet'), aSet)
   assert.equal(snapshot(state, 'aMap'), aMap)
+  assert.equal(snapshot(state, 'aMap.v0'), 'v1')
 })
 
 test('snapshot cache inside subscription', () => {
@@ -1258,6 +1259,17 @@ test('onAction option', () => {
     assert.instance(err, Error)
     assert.is(err.message, 'inc=2')
   }
+})
+
+test('fix snapshot ref by prop should return mapSnapshot if is enabled', () => {
+  const state = staty({
+    ref: ref({ value: 'test' }, ({ value }) => value),
+    deep: ref({ value: { sub: 'test' } }, ({ value }) => value)
+  })
+
+  assert.equal(snapshot(state), { ref: 'test', deep: { sub: 'test' } })
+  assert.equal(snapshot(state, 'ref'), 'test')
+  assert.equal(snapshot(state, 'deep.sub'), 'test')
 })
 
 test.run()

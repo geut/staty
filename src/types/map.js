@@ -13,6 +13,13 @@ export class MapStaty extends InternalStaty {
     this._reverse = new Map()
   }
 
+  getValueByProp (prop) {
+    const value = this.target.get(prop)
+    const staty = value?.[kStaty]
+    if (staty && staty.isRef) return staty.getSnapshot()
+    return value
+  }
+
   onGetSnapshot (target, prop, value) {
     if (prop === 'set' || prop === 'delete' || prop === 'clear') {
       this.onReadOnly(target, prop, value)
