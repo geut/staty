@@ -3,18 +3,25 @@
   "version": "2.1.1",
   "description": "Build a proxy-state from plain objects",
   "type": "module",
+  "main": "./dist/index.cjs",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./src/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
+    "dist",
     "src"
   ],
   "scripts": {
     "start": "node index.js",
+    "build": "tsup",
     "test": "uvu",
     "posttest": "npm run lint",
     "lint": "standard",
-    "prepublishOnly": "npm test",
+    "prepublishOnly": "npm test && npm run build",
     "coverage": "c8 uvu",
     "make-badge": "coverage-badges"
   },
@@ -23,6 +30,7 @@
     "coverage-badges": "^1.0.7",
     "nanobench": "^3.0.0",
     "standard": "^17.0.0",
+    "tsup": "^6.3.0",
     "uvu": "^0.5.1"
   },
   "standard": {
@@ -30,6 +38,19 @@
       "node",
       "browser"
     ]
+  },
+  "tsup": {
+    "entry": [
+      "src/index.js"
+    ],
+    "format": [
+      "cjs",
+      "iife"
+    ],
+    "globalName": "Staty",
+    "splitting": false,
+    "sourcemap": true,
+    "clean": true
   },
   "repository": {
     "type": "git",
