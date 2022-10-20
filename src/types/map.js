@@ -54,14 +54,17 @@ export class MapStaty extends InternalStaty {
     if (oldVal && (oldVal === val || oldVal?.[kStaty]?.target === val)) return
     const type = Object.prototype.toString.call(val)
     const oldReverse = this._reverse.has(key) ? this._reverse.get(key) : kEmpty
+    let checkCircularReference = true
     if (!val?.[kStaty] && isValidForStaty(type)) {
       this._reverse.set(key, val)
       val = staty(val, { targetType: type, disableCache: internal.disableCache })
+      checkCircularReference = false
     }
-    target.set(key, val)
+
     const parentProp = typeof key === 'string' ? key : kNoProp
+    val?.[kStaty]?.addParent?.(parentProp, internal, checkCircularReference)
     oldVal?.[kStaty]?.delParent?.(parentProp, internal)
-    val?.[kStaty]?.addParent?.(parentProp, internal)
+    target.set(key, val)
 
     const prevStaty = {
       oldVal: oldVal?.[kStaty],

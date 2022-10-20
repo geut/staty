@@ -2,6 +2,7 @@ import { kStaty, isObject, isArray, isSet, isMap, isDate, isRegexp, isDataView, 
 
 export function cloneStructures (x, str) {
   let tmp
+
   if (str === isDate) {
     tmp = new Date(+x)
   } else if (str === isRegexp) {
@@ -12,7 +13,7 @@ export function cloneStructures (x, str) {
   } else if (str === isBuffer) {
     tmp = x.slice(0)
   } else if (str.slice(-6) === 'Array]') {
-    tmp = new x.constructor(x)
+    tmp = x.constructor.from(x)
   }
 
   return tmp

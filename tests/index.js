@@ -92,7 +92,7 @@ test('snapshot', () => {
   const aBuffer = Buffer.from('test')
   const aArrayBuffer = new ArrayBuffer(2)
   const aDataView = new DataView(aArrayBuffer)
-
+  const uint8Array = new Uint8Array([0, 1])
   const obj = {
     val: 'str',
     num: 0,
@@ -105,6 +105,7 @@ test('snapshot', () => {
     aMap,
     regex: /regex/,
     aBuffer,
+    uint8Array,
     aArrayBuffer,
     aDataView
   }
@@ -1270,6 +1271,45 @@ test('fix snapshot ref by prop should return mapSnapshot if is enabled', () => {
   assert.equal(snapshot(state), { ref: 'test', deep: { sub: 'test' } })
   assert.equal(snapshot(state, 'ref'), 'test')
   assert.equal(snapshot(state, 'deep.sub'), 'test')
+})
+
+test('circular reference', () => {
+  const state = staty({
+    val: 'val',
+    deep0: {
+      deep1: {}
+    },
+    deepSet: new Set(),
+    deepMap: new Map()
+  })
+
+  try {
+    state.deep0.deep1.circular = state
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.location, '^deep0.deep1.circular')
+  }
+
+  try {
+    state.deepSet.add(state)
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.location, '^deepSet.<*>')
+  }
+
+  try {
+    state.deepMap.set('test', state)
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.location, '^deepMap.test')
+  }
+
+  try {
+    state.deepMap.set(state, state)
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.location, '^deepMap.<*>')
+  }
 })
 
 test.run()

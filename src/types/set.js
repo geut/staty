@@ -47,14 +47,16 @@ export class SetStaty extends InternalStaty {
     if (target.has(val)) return
 
     const type = Object.prototype.toString.call(val)
+    let checkCircularReference = true
     if (!val?.[kStaty] && isValidForStaty(type)) {
       const state = staty(val, { targetType: type, disableCache: internal.disableCache })
       this._reverse.set(val, state)
       val = state
+      checkCircularReference = false
     }
 
+    val?.[kStaty]?.addParent?.(kNoProp, internal, checkCircularReference)
     target.add(val)
-    val?.[kStaty]?.addParent?.(kNoProp, internal)
     internal.run(null, () => {
       internal.clearSnapshot()
       target.delete(val)

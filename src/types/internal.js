@@ -90,13 +90,35 @@ export class InternalStaty {
     return value
   }
 
-  addParent (prop, parent) {
+  checkCircularReference (prop, value) {
+    prop = prop === kNoProp ? '<*>' : prop
+
+    if (this === value) {
+      const err = new Error('circular reference detected')
+      err.location = `^${prop}`
+      err.value = value.getSnapshot()
+      throw err
+    }
+
+    this.propsBinded.forEach((parents, propBinded) => {
+      propBinded = propBinded === kNoProp ? '<*>' : propBinded
+      parents.forEach(parent => {
+        parent.checkCircularReference(prop ? `${propBinded}.${prop}` : propBinded, value)
+      })
+    })
+  }
+
+  addParent (prop, parent, checkCircularReference) {
     let parents
     if (this.propsBinded.has(prop)) {
       parents = this.propsBinded.get(prop)
     } else {
       parents = new Set()
       this.propsBinded.set(prop, parents)
+    }
+
+    if (checkCircularReference) {
+      parent.checkCircularReference(prop, this)
     }
 
     parents.add(parent)
@@ -149,12 +171,10 @@ export class InternalStaty {
       })
 
       this.propsBinded.forEach((parents, propBinded) => {
-        const parentProp = prop && propBinded !== kNoProp
-          ? `${propBinded}.${prop}`
-          : propBinded !== kNoProp
-            ? propBinded
-            : null
-        parents.forEach(parent => parent.run(parentProp))
+        propBinded = propBinded === kNoProp ? '<*>' : propBinded
+        parents.forEach(parent => {
+          parent.run(prop ? `${propBinded}.${prop}` : propBinded)
+        })
       })
 
       actionInitiator && action.done()

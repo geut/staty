@@ -1,7 +1,7 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 import { batchHandler } from './batch.js'
-import { kStaty, isObject, isArray, isMap, isSet } from './constants.js'
+import { kStaty, isObject, isArray, isMap, isSet, isValidForStaty } from './constants.js'
 import { clone } from './clone.js'
 import { ObjectStaty } from './types/object.js'
 import { ArrayStaty } from './types/array.js'
@@ -80,38 +80,40 @@ function _createProxy (target, internal) {
       if (oldValue === value) return true
 
       const type = Object.prototype.toString.call(value)
-      if (!valueStaty && (type === isObject || type === isArray || type === isMap || type === isSet)) {
+      let checkCircularReference = true
+      if (!valueStaty && isValidForStaty(type)) {
         value = staty(value, { targetType: type, onReadOnly: internal.onReadOnly, onErrorSubscription: internal.onErrorSubscription })
         valueStaty = value[kStaty]
+        checkCircularReference = false
       }
 
-      if (Reflect.set(target, prop, value)) {
+      if (oldValueStaty !== valueStaty) {
+        valueStaty?.addParent(prop, internal, checkCircularReference)
+        oldValueStaty?.delParent(prop, internal)
+      }
+
+      Reflect.set(target, prop, value)
+
+      internal.run(prop, () => {
+        internal.clearSnapshot()
+
         if (oldValueStaty !== valueStaty) {
-          oldValueStaty?.delParent(prop, internal)
-          valueStaty?.addParent(prop, internal)
+          oldValueStaty?.addParent(prop, internal)
+          valueStaty?.delParent(prop, internal)
         }
 
-        internal.run(prop, () => {
-          internal.clearSnapshot()
-
-          if (oldValueStaty !== valueStaty) {
-            valueStaty?.delParent(prop, internal)
-            oldValueStaty?.addParent(prop, internal)
+        if (newProp) {
+          if (Array.isArray(target)) {
+            const newArr = target.filter((_, i) => `${i}` !== prop)
+            target.splice(0, target.length, ...newArr)
+          } else {
+            Reflect.deleteProperty(target, prop)
           }
+          return
+        }
 
-          if (newProp) {
-            if (Array.isArray(target)) {
-              const newArr = target.filter((_, i) => `${i}` !== prop)
-              target.splice(0, target.length, ...newArr)
-            } else {
-              Reflect.deleteProperty(target, prop)
-            }
-            return
-          }
-
-          Reflect.set(target, prop, oldValue)
-        })
-      }
+        Reflect.set(target, prop, oldValue)
+      })
 
       return true
     },
