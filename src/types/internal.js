@@ -3,12 +3,12 @@ import { actions } from '../action.js'
 import { cloneStructures } from '../clone.js'
 
 export const rawValue = (value) => {
-  if (!value) return value
+  if (!value || typeof value !== 'object') return value
 
   const staty = value?.[kStaty]
   if (staty) {
     if (staty.isRef) return value
-    return staty.snapshot
+    return staty.getSnapshot()
   }
 
   const tmp = cloneStructures(value, Object.prototype.toString.call(value))
@@ -37,7 +37,14 @@ export class InternalStaty {
     this.onGetSnapshot = this.onGetSnapshot.bind(this)
   }
 
-  get snapshot () {
+  getValueByProp (prop) {
+    const value = Reflect.get(this.target, prop)
+    const staty = value?.[kStaty]
+    if (staty && staty.isRef) return staty.getSnapshot()
+    return value
+  }
+
+  getSnapshot () {
     if (this._snapshot !== kEmpty) return this._snapshot
     const internal = this
     const snapshot = this._snapshot = new Proxy(this.clone(), {
@@ -55,17 +62,6 @@ export class InternalStaty {
       }
     })
     return snapshot
-  }
-
-  getValueByProp (prop) {
-    const value = Reflect.get(this.target, prop)
-    const staty = value?.[kStaty]
-    if (staty && staty.isRef) return staty.getSnapshot()
-    return value
-  }
-
-  getSnapshot () {
-    return this.snapshot
   }
 
   onGetSnapshot (target, prop, value) {

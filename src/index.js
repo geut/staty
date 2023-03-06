@@ -1,13 +1,9 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 import { batchHandler } from './batch.js'
-import { kStaty, isObject, isArray, isMap, isSet, isValidForStaty } from './constants.js'
-import { clone } from './clone.js'
-import { ObjectStaty } from './types/object.js'
-import { ArrayStaty } from './types/array.js'
-import { MapStaty } from './types/map.js'
-import { SetStaty } from './types/set.js'
+import { kStaty, isObject, isArray, isMap, isSet } from './constants.js'
 import { RefStaty } from './types/ref.js'
+import { createProxy } from './proxy.js'
 
 function _subscribe (state, handler, prop, opts = {}) {
   const { filter = null, before = false } = opts
@@ -34,112 +30,11 @@ function _subscribe (state, handler, prop, opts = {}) {
   }
 }
 
-function _createProxy (target, internal) {
-  const state = new Proxy(target, {
-    get (target, prop) {
-      if (prop === kStaty) return internal
-      const value = Reflect.get(target, prop)
-      if (value === null || value === undefined) return value
-
-      const valueStaty = value?.[kStaty]
-
-      if (valueStaty?.isRef) {
-        return valueStaty.value
-      }
-
-      return internal.handler(value, prop)
-    },
-    set (target, prop, value) {
-      const newProp = !Reflect.has(target, prop)
-      const oldValue = Reflect.get(target, prop)
-      const oldValueStaty = oldValue?.[kStaty]
-      let valueStaty = value?.[kStaty]
-
-      // start ref support
-      if (oldValueStaty?.isRef && !valueStaty?.isRef) {
-        if (oldValue === value || oldValueStaty.value === value) return true
-        const oldRawValue = oldValueStaty.value
-        oldValueStaty.setValue(value)
-        internal.run(prop, () => {
-          internal.clearSnapshot()
-          oldValueStaty.setValue(oldRawValue)
-        })
-        return true
-      } else if (valueStaty?.isRef) {
-        if (Reflect.set(target, prop, value)) {
-          internal.run(prop, () => {
-            internal.clearSnapshot()
-            if (newProp) return Reflect.deleteProperty(target, prop)
-            Reflect.set(target, prop, oldValue)
-          })
-        }
-        return true
-      }
-      // end ref support
-
-      if (oldValue === value) return true
-
-      const type = Object.prototype.toString.call(value)
-      let checkCircularReference = true
-      if (!valueStaty && isValidForStaty(type)) {
-        value = staty(value, { targetType: type, onReadOnly: internal.onReadOnly, onErrorSubscription: internal.onErrorSubscription })
-        valueStaty = value[kStaty]
-        checkCircularReference = false
-      }
-
-      if (oldValueStaty !== valueStaty) {
-        valueStaty?.addParent(prop, internal, checkCircularReference)
-        oldValueStaty?.delParent(prop, internal)
-      }
-
-      Reflect.set(target, prop, value)
-
-      internal.run(prop, () => {
-        internal.clearSnapshot()
-
-        if (oldValueStaty !== valueStaty) {
-          oldValueStaty?.addParent(prop, internal)
-          valueStaty?.delParent(prop, internal)
-        }
-
-        if (newProp) {
-          if (Array.isArray(target)) {
-            const newArr = target.filter((_, i) => `${i}` !== prop)
-            target.splice(0, target.length, ...newArr)
-          } else {
-            Reflect.deleteProperty(target, prop)
-          }
-          return
-        }
-
-        Reflect.set(target, prop, oldValue)
-      })
-
-      return true
-    },
-
-    deleteProperty (target, prop) {
-      if (!Reflect.has(target, prop)) return true
-
-      const oldValue = Reflect.get(target, prop)
-      oldValue?.[kStaty]?.delParent?.(prop, internal)
-
-      if (Array.isArray(target)) return Reflect.deleteProperty(target, prop)
-      if (Reflect.deleteProperty(target, prop)) {
-        internal.run(prop, () => {
-          internal.clearSnapshot()
-          oldValue?.[kStaty]?.addParent?.(prop, internal)
-          Reflect.set(target, prop, oldValue)
-        })
-      }
-      return true
-    }
-  })
-
-  internal.proxy = state
-
-  return state
+const defaultOnReadOnly = (target, prop, value) => {
+  console.warn('snapshots are readonly', { target, prop, value })
 }
+
+const defaultOnErrorSubscription = err => console.warn(err)
 
 /**
  * Creates a new proxy-state
@@ -154,34 +49,20 @@ function _createProxy (target, internal) {
 export function staty (target, opts = {}) {
   const {
     targetType = Object.prototype.toString.call(target),
-    onReadOnly = (target, prop, value) => {
-      console.warn('snapshots are readonly', { target, prop, value })
-    },
-    onErrorSubscription = err => console.warn(err),
+    onReadOnly = defaultOnReadOnly,
+    onErrorSubscription = defaultOnErrorSubscription,
     onAction
   } = opts
 
   if (target?.[kStaty]) return target
 
-  let InternalClass
-
-  if (targetType === isObject) {
-    InternalClass = ObjectStaty
-  } else if (targetType === isArray) {
-    InternalClass = ArrayStaty
-  } else if (targetType === isMap) {
-    InternalClass = MapStaty
-  } else if (targetType === isSet) {
-    InternalClass = SetStaty
+  if (targetType !== isObject && targetType !== isArray && targetType !== isMap && targetType !== isSet) {
+    throw new Error('the `target` is not valid for staty')
   }
 
-  if (!InternalClass) throw new Error('the `target` is not valid for staty')
+  const proxyOptions = { onReadOnly, onErrorSubscription, onAction }
 
-  const state = clone(target, (val, type, parent) => {
-    if (target === parent) return _createProxy(val, new InternalClass(val, { onReadOnly, onErrorSubscription, onAction }))
-    return staty(val, { targetType: type, onReadOnly, onErrorSubscription })
-  })
-
+  const state = createProxy(proxyOptions, target)
   if (onAction) onAction(state)
 
   return state

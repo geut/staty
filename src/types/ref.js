@@ -1,12 +1,13 @@
 const kValue = Symbol('valueRef')
 
+const kMapSnapshot = Symbol('kMapSnapshot')
+const kSnapshot = Symbol('kSnapshot')
 export class RefStaty {
-  #mapSnapshot
-
   constructor (value, mapSnapshot, cache = false) {
     this.isRef = true
     this.cache = cache
-    this.#mapSnapshot = mapSnapshot
+    this[kMapSnapshot] = mapSnapshot
+    this[kSnapshot] = null
     this.setValue(value)
   }
 
@@ -16,15 +17,17 @@ export class RefStaty {
   }
 
   getSnapshot () {
-    if (this.cache) return this.snapshot === kValue ? this.value : this.snapshot
+    const snapshot = this[kSnapshot]
+    if (this.cache) return snapshot === kValue ? this.value : snapshot
     this.updateSnapshot()
-    return this.snapshot === kValue ? this.value : this.snapshot
+    return snapshot === kValue ? this.value : snapshot
   }
 
   updateSnapshot () {
-    this.snapshot = kValue
-    if (this.#mapSnapshot) {
-      this.snapshot = this.#mapSnapshot(this.value)
+    this[kSnapshot] = kValue
+    const mapSnapshot = this[kMapSnapshot]
+    if (mapSnapshot) {
+      this[kSnapshot] = mapSnapshot(this.value)
     }
   }
 }

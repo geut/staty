@@ -28,10 +28,12 @@
   "devDependencies": {
     "c8": "^7.11.0",
     "coverage-badges": "^1.0.7",
+    "mitata": "^0.1.6",
     "nanobench": "^3.0.0",
     "standard": "^17.0.0",
     "tsup": "^6.3.0",
-    "uvu": "^0.5.1"
+    "uvu": "^0.5.1",
+    "valtio": "^1.10.3"
   },
   "standard": {
     "env": [

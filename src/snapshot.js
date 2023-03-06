@@ -47,5 +47,5 @@ export function snapshot (state, prop) {
     return snapshotProp(state, prop.split('.'))
   }
 
-  return state[kStaty].snapshot
+  return state[kStaty].getSnapshot()
 }
