@@ -1,5 +1,5 @@
-// inspired by: https://github.com/pmndrs/valtio
 
+// inspired by: https://github.com/pmndrs/valtio
 import { batchHandler } from './batch.js'
 import { kStaty, isObject, isArray, isMap, isSet } from './constants.js'
 import { RefStaty } from './types/ref.js'
@@ -34,15 +34,12 @@ const defaultOnReadOnly = (target, prop, value) => {
   console.warn('snapshots are readonly', { target, prop, value })
 }
 
-const defaultOnErrorSubscription = err => console.warn(err)
-
 /**
  * Creates a new proxy-state
  *
  * @param {*} target
  * @param {object} [opts]
  * @param {(target: any, prop: any, value: any) => {}} [opts.onReadOnly]
- * @param {(err: Error) => {}} [opts.onErrorSubscription]
  * @param {(state: Proxy) => {}} [opts.onAction]
  * @returns {Proxy}
  */
@@ -50,7 +47,6 @@ export function staty (target, opts = {}) {
   const {
     targetType = Object.prototype.toString.call(target),
     onReadOnly = defaultOnReadOnly,
-    onErrorSubscription = defaultOnErrorSubscription,
     onAction
   } = opts
 
@@ -60,10 +56,14 @@ export function staty (target, opts = {}) {
     throw new Error('the `target` is not valid for staty')
   }
 
-  const proxyOptions = { onReadOnly, onErrorSubscription, onAction }
+  const proxyOptions = { onReadOnly }
 
   const state = createProxy(proxyOptions, target)
-  if (onAction) onAction(state)
+
+  if (onAction) {
+    onAction(state)
+    state[kStaty].setOnAction(onAction)
+  }
 
   return state
 }
@@ -79,7 +79,7 @@ export function staty (target, opts = {}) {
  * @returns {ListenersReport}
  */
 export function listeners (state) {
-  if (!state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
+  if (!state || !state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
 
   const subscriptions = state[kStaty].subscriptions
 
@@ -118,19 +118,17 @@ export function listeners (state) {
  * @param {boolean} [opts.batch=false] execute in batch turning the subscription into async
  * @param {boolean} [opts.autorun=false] run immediately
  * @param {boolean} [opts.before=false] run before finish the action. A good place to validate changes
- * @param {(error: Error) => void} [opts.onError] error handler subscription. Works only with before=false
  * @returns {UnsubscribeFunction}
  */
 export function subscribe (state, handler, opts = {}) {
-  if (!state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
+  if (!state || !state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
 
   const {
     props,
     filter,
     batch = false,
     autorun = false,
-    before = false,
-    onError = state[kStaty].onErrorSubscription
+    before = false
   } = opts
 
   if (batch && before) throw new Error('batch=true with before=true is not possible')
@@ -139,17 +137,6 @@ export function subscribe (state, handler, opts = {}) {
   const subscribeProps = {
     filter,
     before
-  }
-
-  if (!before) {
-    const prevHandler = handler
-    handler = () => {
-      try {
-        prevHandler()
-      } catch (err) {
-        onError(err)
-      }
-    }
   }
 
   if (batch) {

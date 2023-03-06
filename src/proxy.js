@@ -1,4 +1,3 @@
-import { staty } from './index.js'
 import { kStaty, isObject, isArray, isSet, isMap, isValidForStaty } from './constants.js'
 import { ObjectStaty } from './types/object.js'
 import { ArrayStaty } from './types/array.js'
@@ -54,7 +53,7 @@ function _createProxy (internal) {
       const type = Object.prototype.toString.call(value)
       let checkCircularReference = true
       if (!valueStaty && isValidForStaty(type)) {
-        value = staty(value, { targetType: type, onReadOnly: internal.onReadOnly, onErrorSubscription: internal.onErrorSubscription })
+        value = createProxy({ onReadOnly: internal.onReadOnly }, value)
         valueStaty = value[kStaty]
         checkCircularReference = false
       }
@@ -162,6 +161,5 @@ export function createProxy (proxyOptions, x, p, pk) {
     return proxy
   }
 
-  if (tmp) return tmp
-  return x
+  return tmp
 }

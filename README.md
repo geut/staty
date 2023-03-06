@@ -64,7 +64,6 @@ Creates a new proxy-state
 
 - `target: any`
 - `opts?: Object = {}`
-  - `onErrorSubscription?: (err: Error) => {}` global handle for error subscriptions
   - `onReadOnly?: (target: any, prop: any, value: any) => {}` global handle for readonly snapshot errors
   - `onAction?: (state: Proxy, actionName: any) => {}` global subscription to run before every action. Create a state is also an action so it will run on every staty({}) call.
 
@@ -86,7 +85,6 @@ Subscribe for changes in the state
   - `batch?: boolean = false` execute in batch turning the subscription into async. **Required before=false**
   - `autorun?: boolean` run immediately. **Required before=false**
   - `before?: boolean` run before the other subscriptions and after the action finish. Good place to validate your state.  **Required batch=false && autorun=false**
-  - `onError?: (error: Error) => void` error handler subscription. **Required before=false**
 
 #### `ref(value, mapSnapshot?, cache?) => any`
 

@@ -11,22 +11,13 @@ export const rawValue = (value) => {
     return staty.getSnapshot()
   }
 
-  const tmp = cloneStructures(value, Object.prototype.toString.call(value))
-  if (tmp) return tmp
-  return value
+  return cloneStructures(value, Object.prototype.toString.call(value))
 }
 
 export class InternalStaty {
-  constructor (target, { onReadOnly, onErrorSubscription, onAction }) {
+  constructor (target, { onReadOnly }) {
     this.target = target
     this.onReadOnly = onReadOnly
-    this.onErrorSubscription = onErrorSubscription
-    if (onAction) {
-      this.onAction = {
-        run: actionName => onAction(this.proxy, actionName),
-        before: true
-      }
-    }
     this.subscriptions = {
       default: new Set(),
       props: new Map()
@@ -35,6 +26,13 @@ export class InternalStaty {
     this.isRef = false
     this._snapshot = kEmpty
     this.onGetSnapshot = this.onGetSnapshot.bind(this)
+  }
+
+  setOnAction (onAction) {
+    this.onAction = {
+      run: actionName => onAction(this.proxy, actionName),
+      before: true
+    }
   }
 
   getValueByProp (prop) {

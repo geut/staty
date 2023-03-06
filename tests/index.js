@@ -135,77 +135,6 @@ test('snapshot cache inside subscription', () => {
   state.inc++
 })
 
-test('subscription error', () => {
-  let onErrorCalls = 0
-
-  const state = staty({
-    inc: 0
-  }, {
-    onErrorSubscription () {
-      onErrorCalls++
-    }
-  })
-
-  subscribe(state, () => {
-    throw new Error('test0')
-  })
-
-  subscribe(state, () => {
-    throw new Error('test0')
-  }, {
-    onError: () => {
-      onErrorCalls++
-    }
-  })
-
-  const unsubscribe = subscribe(state, () => {
-    throw new Error('test1')
-  }, {
-    before: true,
-    onError: () => {
-      onErrorCalls++
-    }
-  })
-
-  try {
-    state.inc++
-    assert.unreachable('should have thrown')
-  } catch (err) {
-    assert.instance(err, Error)
-    assert.is(err.message, 'test1')
-  }
-
-  assert.is(state.inc, 0)
-  assert.is(onErrorCalls, 0)
-  unsubscribe()
-
-  try {
-    state.inc++
-  } catch (err) {
-    assert.unreachable('should not have thrown')
-  }
-
-  assert.is(state.inc, 1)
-  assert.is(onErrorCalls, 2)
-
-  const warn = console.warn.bind(console)
-  console.warn = () => {
-    onErrorCalls++
-  }
-
-  const def = staty({})
-
-  subscribe(def, () => {
-    throw new Error('test')
-  })
-
-  def.change = 0
-
-  console.warn = warn
-  assert.is(def.change, 0)
-  assert.is(onErrorCalls, 3)
-})
-
 test('ref', () => {
   const state = staty({
     val: 'str',
@@ -692,13 +621,17 @@ test('autorun', () => {
 
   subscribe(state, () => {
     callsByProps++
+  }, { autorun: true, props: 'count' })
+
+  subscribe(state, () => {
+    callsByProps++
   }, { props: ['count'], autorun: true })
 
   state.count++
   state.text = 'change'
 
   assert.is(calls, 3)
-  assert.is(callsByProps, 2)
+  assert.is(callsByProps, 4)
 })
 
 test('action cancel', () => {
@@ -965,10 +898,6 @@ test('fix issue where ref cache is not updated', () => {
 test('release action on unhandle error', async () => {
   const state = staty({
     inc: 0
-  }, {
-    onErrorSubscription (err) {
-      throw err
-    }
   })
 
   try {
@@ -1309,6 +1238,70 @@ test('circular reference', () => {
     assert.unreachable('should have thrown')
   } catch (err) {
     assert.is(err.location, '^deepMap.<*>')
+  }
+})
+
+test('state validation', () => {
+  try {
+    listeners()
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'state is not valid')
+  }
+
+  try {
+    listeners('not valid')
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'state is not valid')
+  }
+
+  try {
+    listeners(ref({}))
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'state is not valid')
+  }
+
+  try {
+    subscribe('not valid')
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'state is not valid')
+  }
+
+  try {
+    subscribe('not valid')
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'state is not valid')
+  }
+
+  try {
+    subscribe(ref({}))
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'state is not valid')
+  }
+
+  try {
+    subscribe(staty({}), () => {}, {
+      batch: true,
+      before: true
+    })
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'batch=true with before=true is not possible')
+  }
+
+  try {
+    subscribe(staty({}), () => {}, {
+      autorun: true,
+      before: true
+    })
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.message, 'autorun=true with before=true is not possible')
   }
 })
 
