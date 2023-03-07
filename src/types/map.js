@@ -1,6 +1,4 @@
 import { InternalStaty, rawValue } from './internal.js'
-import { kStaty, kNoProp, isValidForStaty, kEmpty } from '../constants.js'
-import { staty } from '../index.js'
 import { actions, action } from '../action.js'
 
 export class MapStaty extends InternalStaty {
@@ -10,14 +8,6 @@ export class MapStaty extends InternalStaty {
     this._setHandler = this._setHandler.bind(this)
     this._deleteHandler = this._deleteHandler.bind(this)
     this._clearHandler = this._clearHandler.bind(this)
-    this._reverse = new Map()
-  }
-
-  getValueByProp (prop) {
-    const value = this.target.get(prop)
-    const staty = value?.[kStaty]
-    if (staty && staty.isRef) return staty.getSnapshot()
-    return value
   }
 
   onGetSnapshot (target, prop, value) {
@@ -38,6 +28,26 @@ export class MapStaty extends InternalStaty {
     return tmp
   }
 
+  reflectSet (target, prop, value, useBaseReflect) {
+    if (useBaseReflect) return Reflect.set(target, prop, value)
+    return !!target.set(prop, value)
+  }
+
+  reflectHas (target, prop, useBaseReflect) {
+    if (useBaseReflect) return Reflect.has(target, prop)
+    return target.has(prop)
+  }
+
+  reflectGet (target, prop, useBaseReflect) {
+    if (useBaseReflect) return Reflect.get(target, prop)
+    return target.get(prop)
+  }
+
+  reflectDeleteProperty (target, prop, useBaseReflect) {
+    if (useBaseReflect) return Reflect.deleteProperty(target, prop)
+    return target.delete(prop)
+  }
+
   handler (value, prop) {
     if (prop === 'set') return this._setHandler
     if (prop === 'delete') return this._deleteHandler
@@ -47,65 +57,11 @@ export class MapStaty extends InternalStaty {
   }
 
   _setHandler (key, val) {
-    const internal = this
-    const target = this.target
-    if (this._reverse.has(key) && this._reverse.get(key) === val) return
-    const oldVal = target.get(key)
-    if (oldVal && (oldVal === val || oldVal?.[kStaty]?.target === val)) return
-    const type = Object.prototype.toString.call(val)
-    const oldReverse = this._reverse.has(key) ? this._reverse.get(key) : kEmpty
-    let checkCircularReference = true
-    if (!val?.[kStaty] && isValidForStaty(type)) {
-      this._reverse.set(key, val)
-      val = staty(val, { targetType: type, disableCache: internal.disableCache })
-      checkCircularReference = false
-    }
-
-    const parentProp = typeof key === 'string' ? key : kNoProp
-    val?.[kStaty]?.addParent?.(parentProp, internal, checkCircularReference)
-    oldVal?.[kStaty]?.delParent?.(parentProp, internal)
-    target.set(key, val)
-
-    const prevStaty = {
-      oldVal: oldVal?.[kStaty],
-      val: val?.[kStaty]
-    }
-    internal.run(key, () => {
-      internal.clearSnapshot()
-      if (oldVal) {
-        if (oldReverse !== kEmpty) {
-          this._reverse.set(key, oldReverse)
-        }
-        target.set(key, oldVal)
-      } else {
-        this._reverse.delete(key)
-        target.delete(key)
-      }
-      prevStaty.oldVal?.addParent?.(parentProp, internal)
-      prevStaty.val?.delParent?.(parentProp, internal)
-    })
+    return this._set(this.target, key, val)
   }
 
   _deleteHandler (key) {
-    const internal = this
-    const target = this.target
-
-    const val = target.get(key)
-    if (!target.delete(key)) return
-    const parentProp = typeof key === 'string' ? key : kNoProp
-    val?.[kStaty]?.delParent?.(parentProp, internal)
-
-    const oldReverse = this._reverse.has(key) ? this._reverse.get(key) : kEmpty
-    this._reverse.delete(key)
-    const prevStaty = val?.[kStaty]
-    internal.run(key, () => {
-      internal.clearSnapshot()
-      if (oldReverse !== kEmpty) {
-        this._reverse.set(key, oldReverse)
-      }
-      target.set(key, val)
-      prevStaty?.addParent?.(parentProp, internal)
-    })
+    return this._deleteProperty(this.target, key)
   }
 
   _clearHandler () {

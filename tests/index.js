@@ -571,8 +571,9 @@ test('array mutable operations', () => {
   })
 
   state.arr.splice(0, 1)
-  state.arr.pop()
-  state.arr.shift()
+  assert.equal(state.arr.pop(), 3)
+  assert.equal(state.arr.shift(), 1)
+  assert.equal(state.arr.pop(), undefined)
 
   action(() => {
     state.arr.push('')
@@ -936,6 +937,10 @@ test('not override snapshots', () => {
 
   snap.inc++
   snap.inner.readonly = false
+
+  // we can do inmutable operations over the snapshot array
+  assert.equal(snap.arr.slice(), [1, 2])
+
   snap.arr.push(3)
   snap.map.set('key', 'val')
   snap.set.add('val')
@@ -999,7 +1004,12 @@ test('map collections', () => {
   })
   assert.is(state.map.size, 0)
 
-  assert.is(calls, 16)
+  // patch map should work
+  state.map.random = 'random'
+  assert.is(state.map.random, 'random')
+  delete state.map.random
+  assert.is('random' in state.map, false)
+  assert.is(calls, 18)
 })
 
 test('set collections', () => {
@@ -1015,6 +1025,9 @@ test('set collections', () => {
 
   state.set.delete('test') // should not do anything
   state.set.add('test')
+
+  assert.is(state.set.has('test'), true)
+
   state.set.delete('test')
   let inner = {
     val: 0
@@ -1050,7 +1063,12 @@ test('set collections', () => {
   })
   assert.is(state.set.size, 0)
 
-  assert.is(calls, 16)
+  // patch set should work
+  state.set.random = 'random'
+  assert.is(state.set.random, 'random')
+  delete state.set.random
+  assert.is('random' in state.set, false)
+  assert.is(calls, 18)
 })
 
 test('rollback with map collections', () => {
@@ -1223,7 +1241,7 @@ test('circular reference', () => {
     state.deepSet.add(state)
     assert.unreachable('should have thrown')
   } catch (err) {
-    assert.is(err.location, '^deepSet.<*>')
+    assert.is(err.location, '^deepSet.?')
   }
 
   try {
@@ -1237,7 +1255,7 @@ test('circular reference', () => {
     state.deepMap.set(state, state)
     assert.unreachable('should have thrown')
   } catch (err) {
-    assert.is(err.location, '^deepMap.<*>')
+    assert.is(err.location, '^deepMap.?')
   }
 })
 

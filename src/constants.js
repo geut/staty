@@ -1,5 +1,4 @@
 export const kStaty = Symbol('staty')
-export const kNoProp = Symbol('noprop')
 export const kEmpty = Symbol('empty')
 export const kInternalAction = Symbol('internalAction')
 export const isArray = '[object Array]'

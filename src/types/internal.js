@@ -1,6 +1,7 @@
-import { kEmpty, kInternalAction, kNoProp, kStaty } from '../constants.js'
+import { kEmpty, kInternalAction, kStaty, isValidForStaty } from '../constants.js'
 import { actions } from '../action.js'
 import { cloneStructures } from '../clone.js'
+import { createProxy } from '../proxy.js'
 
 export const rawValue = (value) => {
   if (!value || typeof value !== 'object') return value
@@ -15,7 +16,8 @@ export const rawValue = (value) => {
 }
 
 export class InternalStaty {
-  constructor (target, { onReadOnly }) {
+  constructor (source, target, { onReadOnly }) {
+    this.source = source
     this.target = target
     this.onReadOnly = onReadOnly
     this.subscriptions = {
@@ -24,8 +26,8 @@ export class InternalStaty {
     }
     this.propsBinded = new Map()
     this.isRef = false
-    this._snapshot = kEmpty
     this.onGetSnapshot = this.onGetSnapshot.bind(this)
+    this._snapshot = kEmpty
   }
 
   setOnAction (onAction) {
@@ -36,7 +38,7 @@ export class InternalStaty {
   }
 
   getValueByProp (prop) {
-    const value = Reflect.get(this.target, prop)
+    const value = this.reflectGet(this.target, prop)
     const staty = value?.[kStaty]
     if (staty && staty.isRef) return staty.getSnapshot()
     return value
@@ -85,7 +87,7 @@ export class InternalStaty {
   }
 
   checkCircularReference (prop, value) {
-    prop = prop === kNoProp ? '<*>' : prop
+    prop = typeof prop === 'string' ? prop : '?'
 
     if (this === value) {
       const err = new Error('circular reference detected')
@@ -95,7 +97,7 @@ export class InternalStaty {
     }
 
     this.propsBinded.forEach((parents, propBinded) => {
-      propBinded = propBinded === kNoProp ? '<*>' : propBinded
+      propBinded = typeof propBinded === 'string' ? propBinded : '?'
       parents.forEach(parent => {
         parent.checkCircularReference(prop ? `${propBinded}.${prop}` : propBinded, value)
       })
@@ -165,7 +167,7 @@ export class InternalStaty {
       })
 
       this.propsBinded.forEach((parents, propBinded) => {
-        propBinded = propBinded === kNoProp ? '<*>' : propBinded
+        propBinded = typeof propBinded === 'string' ? propBinded : '?'
         parents.forEach(parent => {
           parent.run(prop ? `${propBinded}.${prop}` : propBinded)
         })
@@ -176,5 +178,131 @@ export class InternalStaty {
       actionInitiator && action.cancel()
       throw err
     }
+  }
+
+  get (target, prop) {
+    return this._get(target, prop, true)
+  }
+
+  set (target, prop, value) {
+    return this._set(target, prop, value, true)
+  }
+
+  deleteProperty (target, prop) {
+    return this._deleteProperty(target, prop, true)
+  }
+
+  reflectSet (target, prop, value) {
+    return Reflect.set(target, prop, value)
+  }
+
+  reflectHas (target, prop) {
+    return Reflect.has(target, prop)
+  }
+
+  reflectGet (target, prop) {
+    return Reflect.get(target, prop)
+  }
+
+  reflectDeleteProperty (target, prop) {
+    return Reflect.deleteProperty(target, prop)
+  }
+
+  _get (target, prop, useBaseReflect) {
+    if (prop === kStaty) return this
+
+    const value = this.reflectGet(target, prop, useBaseReflect)
+    if (value === null || value === undefined) return value
+
+    const valueStaty = value?.[kStaty]
+
+    if (valueStaty?.isRef) {
+      return valueStaty.value
+    }
+
+    return this.handler(value, prop)
+  }
+
+  _set (target, prop, value, useBaseReflect) {
+    const internal = this
+    const newProp = !internal.reflectHas(target, prop, useBaseReflect)
+    const oldValue = internal.reflectGet(target, prop, useBaseReflect)
+    const oldValueStaty = oldValue?.[kStaty]
+    let valueStaty = value?.[kStaty]
+
+    // start ref support
+    if (oldValueStaty?.isRef && !valueStaty?.isRef) {
+      if (oldValue === value || oldValueStaty.value === value) return true
+      const oldRawValue = oldValueStaty.value
+      oldValueStaty.setValue(value)
+      internal.run(prop, () => {
+        internal.clearSnapshot()
+        oldValueStaty.setValue(oldRawValue)
+      })
+      return true
+    } else if (valueStaty?.isRef) {
+      if (internal.reflectSet(target, prop, value, useBaseReflect)) {
+        internal.run(prop, () => {
+          internal.clearSnapshot()
+          if (newProp) return internal.reflectDeleteProperty(target, prop, useBaseReflect)
+          internal.reflectSet(target, prop, oldValue, useBaseReflect)
+        })
+      }
+      return true
+    }
+    // end ref support
+
+    if (oldValue === value) return true
+
+    const type = Object.prototype.toString.call(value)
+    let checkCircularReference = true
+    if (!valueStaty && isValidForStaty(type)) {
+      if (oldValueStaty && oldValueStaty.source === value) return true
+      value = createProxy({ onReadOnly: internal.onReadOnly }, value, null, null, type)
+      valueStaty = value[kStaty]
+      checkCircularReference = false
+    }
+
+    if (oldValueStaty !== valueStaty) {
+      valueStaty?.addParent(prop, internal, checkCircularReference)
+      oldValueStaty?.delParent(prop, internal)
+    }
+
+    internal.reflectSet(target, prop, value, useBaseReflect)
+
+    internal.run(prop, () => {
+      internal.clearSnapshot()
+
+      if (oldValueStaty !== valueStaty) {
+        oldValueStaty?.addParent(prop, internal)
+        valueStaty?.delParent(prop, internal)
+      }
+
+      if (newProp) {
+        internal.reflectDeleteProperty(target, prop, useBaseReflect)
+        return
+      }
+
+      internal.reflectSet(target, prop, oldValue, useBaseReflect)
+    })
+
+    return true
+  }
+
+  _deleteProperty (target, prop, useBaseReflect) {
+    const internal = this
+    if (!internal.reflectHas(target, prop, useBaseReflect)) return true
+
+    const oldValue = internal.reflectGet(target, prop, useBaseReflect)
+    oldValue?.[kStaty]?.delParent?.(prop, internal)
+
+    if (internal.reflectDeleteProperty(target, prop, useBaseReflect)) {
+      internal.run(prop, () => {
+        internal.clearSnapshot()
+        oldValue?.[kStaty]?.addParent?.(prop, internal)
+        internal.reflectSet(target, prop, oldValue, useBaseReflect)
+      })
+    }
+    return true
   }
 }
