@@ -56,7 +56,7 @@ export function createProxy (proxyOptions, x, p, pk, type) {
   }
 
   if (proxy) {
-    if (p) proxy[kStaty].addParent(pk, p[kStaty], true)
+    if (p) proxy[kStaty].addParent(pk, p[kStaty], false)
     return proxy
   }
 

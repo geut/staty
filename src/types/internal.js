@@ -3,6 +3,14 @@ import { actions } from '../action.js'
 import { cloneStructures } from '../clone.js'
 import { createProxy } from '../proxy.js'
 
+function toString (value) {
+  const type = typeof value
+  if (type === 'string') return value
+  if (type === 'object') return '?'
+  if (type === 'symbol') return value.toString()
+  return String(value)
+}
+
 export const rawValue = (value) => {
   if (!value || typeof value !== 'object') return value
 
@@ -14,7 +22,6 @@ export const rawValue = (value) => {
 
   return cloneStructures(value, Object.prototype.toString.call(value))
 }
-
 export class InternalStaty {
   constructor (source, target, { onReadOnly }) {
     this.source = source
@@ -87,7 +94,7 @@ export class InternalStaty {
   }
 
   checkCircularReference (prop, value) {
-    prop = typeof prop === 'string' ? prop : '?'
+    prop = toString(prop)
 
     if (this === value) {
       const err = new Error('circular reference detected')
@@ -97,9 +104,9 @@ export class InternalStaty {
     }
 
     this.propsBinded.forEach((parents, propBinded) => {
-      propBinded = typeof propBinded === 'string' ? propBinded : '?'
+      propBinded = toString(propBinded)
       parents.forEach(parent => {
-        parent.checkCircularReference(prop ? `${propBinded}.${prop}` : propBinded, value)
+        parent.checkCircularReference(`${propBinded}.${prop}`, value)
       })
     })
   }
@@ -121,7 +128,6 @@ export class InternalStaty {
   }
 
   delParent (prop, parent) {
-    if (!this.propsBinded.has(prop)) return
     const parents = this.propsBinded.get(prop)
     parents.delete(parent)
     if (parents.size === 0) this.propsBinded.delete(prop)
@@ -129,7 +135,6 @@ export class InternalStaty {
 
   run (prop, rollback) {
     let action = actions.current
-    if (action?.inRollback) return
 
     this.clearSnapshot()
 
@@ -167,7 +172,7 @@ export class InternalStaty {
       })
 
       this.propsBinded.forEach((parents, propBinded) => {
-        propBinded = typeof propBinded === 'string' ? propBinded : '?'
+        propBinded = toString(propBinded)
         parents.forEach(parent => {
           parent.run(prop ? `${propBinded}.${prop}` : propBinded)
         })
@@ -252,15 +257,32 @@ export class InternalStaty {
     }
     // end ref support
 
-    if (oldValue === value) return true
+    if (oldValue === value || (oldValueStaty && oldValueStaty.source === value)) return true
 
-    const type = Object.prototype.toString.call(value)
     let checkCircularReference = true
-    if (!valueStaty && isValidForStaty(type)) {
-      if (oldValueStaty && oldValueStaty.source === value) return true
-      value = createProxy({ onReadOnly: internal.onReadOnly }, value, null, null, type)
-      valueStaty = value[kStaty]
-      checkCircularReference = false
+    let type
+    if (!valueStaty) {
+      type = Object.prototype.toString.call(value)
+      if (isValidForStaty(type)) {
+        value = createProxy({ onReadOnly: internal.onReadOnly }, value, null, null, type)
+        valueStaty = value[kStaty]
+        checkCircularReference = false
+      } else {
+        internal.reflectSet(target, prop, value, useBaseReflect)
+
+        internal.run(prop, () => {
+          internal.clearSnapshot()
+
+          if (newProp) {
+            internal.reflectDeleteProperty(target, prop, useBaseReflect)
+            return
+          }
+
+          internal.reflectSet(target, prop, oldValue, useBaseReflect)
+        })
+
+        return true
+      }
     }
 
     if (oldValueStaty !== valueStaty) {

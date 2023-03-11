@@ -5,16 +5,11 @@ class Action {
     this._beforeHandlers = new Set()
     this._handlers = new Set()
     this._done = false
-    this._inRollback = false
     this._history = []
   }
 
   get name () {
     return this._name
-  }
-
-  get inRollback () {
-    return this._inRollback
   }
 
   valid (handler) {
@@ -47,12 +42,10 @@ class Action {
 
   cancel () {
     if (this._done) return
-    this._inRollback = true
     for (let i = this._history.length - 1; i >= 0; i--) {
       this._history[i]()
     }
     this._history = []
-    this._inRollback = false
     this._done = true
     this._onRelease()
   }

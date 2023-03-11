@@ -34,6 +34,8 @@ const defaultOnReadOnly = (target, prop, value) => {
   console.warn('snapshots are readonly', { target, prop, value })
 }
 
+const CACHE = new WeakMap()
+
 /**
  * Creates a new proxy-state
  *
@@ -52,6 +54,8 @@ export function staty (target, opts = {}) {
 
   if (target?.[kStaty]) return target
 
+  if (CACHE.has(target)) return CACHE.get(target)
+
   if (targetType !== isObject && targetType !== isArray && targetType !== isMap && targetType !== isSet) {
     throw new Error('the `target` is not valid for staty')
   }
@@ -64,6 +68,8 @@ export function staty (target, opts = {}) {
     onAction(state)
     state[kStaty].setOnAction(onAction)
   }
+
+  CACHE.set(target, state)
 
   return state
 }

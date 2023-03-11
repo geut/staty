@@ -13,6 +13,12 @@ test('staty return staty', () => {
   assert.is(state, staty(state))
 })
 
+test('same object same staty', () => {
+  const obj = {}
+  const state = staty(obj)
+  assert.is(state, staty(obj))
+})
+
 test('valid staty', () => {
   try {
     staty(true)
@@ -1231,10 +1237,24 @@ test('circular reference', () => {
   })
 
   try {
+    state.deep0 = state
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.location, '^deep0')
+  }
+
+  try {
     state.deep0.deep1.circular = state
     assert.unreachable('should have thrown')
   } catch (err) {
     assert.is(err.location, '^deep0.deep1.circular')
+  }
+
+  try {
+    state.deep0.deep1[Symbol('asymbol')] = state
+    assert.unreachable('should have thrown')
+  } catch (err) {
+    assert.is(err.location, '^deep0.deep1.Symbol(asymbol)')
   }
 
   try {
