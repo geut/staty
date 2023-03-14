@@ -1,0 +1,15 @@
+export const kStaty: any;
+export const kEmpty: any;
+export const kInternalAction: any;
+export const isArray: "[object Array]";
+export const isObject: "[object Object]";
+export const isNumber: "[object Number]";
+export const isString: "[object String]";
+export const isBoolean: "[object Boolean]";
+export const isSet: "[object Set]";
+export const isMap: "[object Map]";
+export const isDate: "[object Date]";
+export const isRegexp: "[object RegExp]";
+export const isDataView: "[object DataView]";
+export const isBuffer: "[object ArrayBuffer]";
+export function isValidForStaty(type: any): boolean;
