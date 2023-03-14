@@ -12,6 +12,10 @@ export class SetStaty extends InternalStaty {
     this._hasHandler = this._hasHandler.bind(this)
   }
 
+  forEach (callback) {
+    this.target.forEach(callback)
+  }
+
   onGetSnapshot (target, prop, value) {
     if (prop === 'add' || prop === 'delete' || prop === 'clear') {
       this.onReadOnly(target, prop, value)

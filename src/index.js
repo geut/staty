@@ -1,7 +1,11 @@
-
 // inspired by: https://github.com/pmndrs/valtio
+
+/**
+ * @callback UnsubscribeFunction
+ */
+
 import { batchHandler } from './batch.js'
-import { kStaty, isObject, isArray, isMap, isSet } from './constants.js'
+import { kStaty, isValidForStaty } from './constants.js'
 import { RefStaty } from './types/ref.js'
 import { createProxy } from './proxy.js'
 
@@ -39,84 +43,87 @@ const CACHE = new WeakMap()
 /**
  * Creates a new proxy-state
  *
- * @param {*} target
+ * @template {object} T
+ * @param {T} target
  * @param {object} [opts]
- * @param {(target: any, prop: any, value: any) => {}} [opts.onReadOnly]
- * @param {(state: Proxy) => {}} [opts.onAction]
- * @returns {Proxy}
+ * @param {(target: T, prop: unknown, value: unknown) => {}} [opts.onReadOnly]
+ * @param {(state: T) => {}} [opts.onAction]
+ * @returns {T}
  */
 export function staty (target, opts = {}) {
   const {
-    targetType = Object.prototype.toString.call(target),
     onReadOnly = defaultOnReadOnly,
     onAction
   } = opts
 
   if (target?.[kStaty]) return target
 
-  if (CACHE.has(target)) return CACHE.get(target)
+  const targetType = Object.prototype.toString.call(target)
 
-  if (targetType !== isObject && targetType !== isArray && targetType !== isMap && targetType !== isSet) {
+  if (!isValidForStaty(targetType)) {
     throw new Error('the `target` is not valid for staty')
+  }
+
+  if (CACHE.has(/** @type {object} */(target))) {
+    return CACHE.get(/** @type {object} */(target))
   }
 
   const proxyOptions = { onReadOnly }
 
-  const state = createProxy(proxyOptions, target)
+  const state = createProxy(proxyOptions, target, undefined, undefined, targetType)
 
   if (onAction) {
     onAction(state)
     state[kStaty].setOnAction(onAction)
   }
 
-  CACHE.set(target, state)
+  CACHE.set(/** @type {object} */(target), state)
 
   return state
 }
 
 /**
- * @typedef {{ listeners: { default: Number, props: Object }, count }} ListenersReport
- */
-
-/**
  * Get subscription listeners count
  *
- * @param {Proxy} state
- * @returns {ListenersReport}
+ * @template {object} T
+ * @param {T} state
+ * @returns {{ count: number, props: Array<{ count: number; prop: string; }> }}
  */
 export function listeners (state) {
   if (!state || !state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
 
-  const subscriptions = state[kStaty].subscriptions
+  const internal = state[kStaty]
 
-  const result = {
-    '*': subscriptions.default.size
-  }
+  const subscriptions = internal.subscriptions
+
+  const arr = []
 
   let count = subscriptions.default.size
+
   subscriptions.props.forEach((listeners, prop) => {
+    arr.push({ prop, count: listeners.size })
     count += listeners.size
-    result[prop] = listeners.size
   })
 
-  for (const prop in state) {
-    if (!state[prop]) continue
-
-    if (state[prop][kStaty]) {
-      const value = listeners(state[prop])
-      result[prop] = value.listeners
-      count += value.count
-      continue
+  internal.forEach((val) => {
+    if (val?.[kStaty] && !val[kStaty].isRef) {
+      const res = listeners(val)
+      count += res.count
+      arr.push(...res.props)
     }
-  }
+  })
 
-  return { listeners: result, count }
+  return {
+    count,
+    props: arr
+  }
 }
 
 /**
  * Subscribe for changes in the state
  *
- * @param {Proxy} state
+ * @template {object} T
+ * @param {T} state
  * @param {() => void} handler
  * @param {Object} [opts]
  * @param {string|string[]} [opts.props] props to subscribe
@@ -187,10 +194,12 @@ export function subscribe (state, handler, opts = {}) {
 /**
  * Add a ref to another object
  *
- * @param {*} value
- * @param {(ref: *) => *} [mapSnapshot]
+ * @template {object} T
+ * @template {object | T} M
+ * @param {T} value
+ * @param {(ref: T) => M} [mapSnapshot]
  * @param {boolean} [cache] enable cache
- * @returns {Proxy}
+ * @returns {T & RefStaty}
  */
 export function ref (value, mapSnapshot, cache) {
   const internal = new RefStaty(value, mapSnapshot, cache)
@@ -217,8 +226,20 @@ export function ref (value, mapSnapshot, cache) {
     }
   })
 
-  return obj
+  return /** @type {T & RefStaty} */(obj)
 }
+
+// /**
+//  * @param {Proxy<} target
+//  * @returns {Proxy<target> is target}
+//  */
+// export function release (target) {
+//   return new Proxy(target, {
+//     get: () => {
+//       return null
+//     }
+//   })
+// }
 
 export { snapshot } from './snapshot.js'
 export { action } from './action.js'

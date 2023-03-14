@@ -10,6 +10,10 @@ export class MapStaty extends InternalStaty {
     this._clearHandler = this._clearHandler.bind(this)
   }
 
+  forEach (callback) {
+    this.target.forEach(callback)
+  }
+
   onGetSnapshot (target, prop, value) {
     if (prop === 'set' || prop === 'delete' || prop === 'clear') {
       this.onReadOnly(target, prop, value)

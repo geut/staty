@@ -67,6 +67,11 @@ export class ActionManager {
     return this._stack[this._stack.length - 1]
   }
 
+  /**
+   *
+   * @param {string | symbol | number} name
+   * @returns
+   */
   create (name = '_') {
     const action = new Action(name, this._onRelease)
     this._stack.push(action)
@@ -79,7 +84,7 @@ export const actions = new ActionManager()
 /**
  * Create a action
  * @param {function} handler
- * @param {string} actionName
+ * @param {string} [actionName]
  */
 export function action (handler, actionName) {
   const action = actions.create(actionName)

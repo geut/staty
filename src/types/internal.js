@@ -35,6 +35,18 @@ export class InternalStaty {
     this.isRef = false
     this.onGetSnapshot = this.onGetSnapshot.bind(this)
     this._snapshot = kEmpty
+    /** @type {Proxy<typeof target>} */
+    this.proxy = null
+  }
+
+  forEach (callback) {
+    for (const prop in this.target) {
+      callback(this.target[prop], prop)
+    }
+  }
+
+  setProxy (proxy) {
+    this.proxy = proxy
   }
 
   setOnAction (onAction) {
@@ -89,7 +101,7 @@ export class InternalStaty {
     this._snapshot = kEmpty
   }
 
-  handler (value) {
+  handler (value, prop) {
     return value
   }
 
@@ -98,7 +110,9 @@ export class InternalStaty {
 
     if (this === value) {
       const err = new Error('circular reference detected')
+      // @ts-ignore
       err.location = `^${prop}`
+      // @ts-ignore
       err.value = value.getSnapshot()
       throw err
     }
@@ -197,19 +211,19 @@ export class InternalStaty {
     return this._deleteProperty(target, prop, true)
   }
 
-  reflectSet (target, prop, value) {
+  reflectSet (target, prop, value, useBaseReflect) {
     return Reflect.set(target, prop, value)
   }
 
-  reflectHas (target, prop) {
+  reflectHas (target, prop, useBaseReflect) {
     return Reflect.has(target, prop)
   }
 
-  reflectGet (target, prop) {
+  reflectGet (target, prop, useBaseReflect) {
     return Reflect.get(target, prop)
   }
 
-  reflectDeleteProperty (target, prop) {
+  reflectDeleteProperty (target, prop, useBaseReflect) {
     return Reflect.deleteProperty(target, prop)
   }
 

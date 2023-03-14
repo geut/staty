@@ -31,20 +31,22 @@ function dlv (obj, key) {
 }
 
 /**
- * Creates a snapshot of the state
+ * Create an snapshot from the state
  *
- * @param {Proxy} state
- * @param {(String|Array<String>)} [prop]
- * @returns {Object}
+ * @template {unknown} T
+ * @type {import('../types/overloading').snapshot}
+ * @param {T} state
+ * @param {Array<string> | string} [props]
  */
-export function snapshot (state, prop) {
+export const snapshot = (state, props) => {
   if (!state[kStaty]) throw new Error('the snapshot requires a valid staty object')
-  if (Array.isArray(prop)) {
-    return prop.map(p => snapshotProp(state, p.split('.')))
+
+  if (Array.isArray(props)) {
+    return props.map(p => snapshotProp(state, p.split('.')))
   }
 
-  if (typeof prop === 'string') {
-    return snapshotProp(state, prop.split('.'))
+  if (typeof props === 'string') {
+    return snapshotProp(state, props.split('.'))
   }
 
   return state[kStaty].getSnapshot()

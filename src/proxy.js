@@ -7,7 +7,7 @@ import { cloneStructures } from './clone.js'
 
 function _createProxy (internal) {
   const state = new Proxy(internal.target, internal)
-  internal.proxy = state
+  internal.setProxy(state)
   return state
 }
 

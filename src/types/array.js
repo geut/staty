@@ -2,6 +2,10 @@ import { InternalStaty, rawValue } from './internal.js'
 import { actions, action } from '../action.js'
 
 export class ArrayStaty extends InternalStaty {
+  forEach (callback) {
+    this.target.forEach(callback)
+  }
+
   onGetSnapshot (target, prop, value) {
     if (prop === 'splice' || prop === 'unshift' || prop === 'push' || prop === 'pop' || prop === 'shift' || prop === 'reverse' || prop === 'sort') {
       this.onReadOnly(target, prop, value)
