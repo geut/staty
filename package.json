@@ -34,7 +34,7 @@
     "nanobench": "^3.0.0",
     "standard": "^17.0.0",
     "tsup": "^6.3.0",
-    "typescript": "^4.9.5",
+    "typescript": "^5.1.0-dev.20230313",
     "uvu": "^0.5.1",
     "valtio": "^1.10.3"
   },

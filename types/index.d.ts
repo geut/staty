@@ -61,4 +61,4 @@ export function ref<T extends unknown, M extends unknown>(value: T, mapSnapshot?
 export { snapshot } from "./snapshot.js";
 export { action } from "./action.js";
 export type UnsubscribeFunction = () => any;
-import { RefStaty } from "./types/ref.js";
+import { RefStaty } from './types/ref.js';

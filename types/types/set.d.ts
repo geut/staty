@@ -6,4 +6,4 @@ export class SetStaty extends InternalStaty {
     _clearHandler(): void;
     _hasHandler(val: any): any;
 }
-import { InternalStaty } from "./internal.js";
+import { InternalStaty } from './internal.js';

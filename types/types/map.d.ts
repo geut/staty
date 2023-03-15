@@ -4,4 +4,4 @@ export class MapStaty extends InternalStaty {
     _deleteHandler(key: any): boolean;
     _clearHandler(): void;
 }
-import { InternalStaty } from "./internal.js";
+import { InternalStaty } from './internal.js';
