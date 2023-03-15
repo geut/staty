@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "start": "node index.js",
-    "build": "tsup --format cjs --target es2022 && npm run types",
+    "build": "esbuild src/index.js --bundle --format=cjs --target=es2022 --outfile=./dist/index.cjs --sourcemap && npm run types",
     "test": "uvu",
     "posttest": "npm run lint",
     "lint": "standard",
@@ -30,10 +30,10 @@
   "devDependencies": {
     "c8": "^7.11.0",
     "coverage-badges": "^1.0.7",
+    "esbuild": "^0.17.11",
     "mitata": "^0.1.6",
     "nanobench": "^3.0.0",
     "standard": "^17.0.0",
-    "tsup": "^6.3.0",
     "typescript": "^5.1.0-dev.20230313",
     "uvu": "^0.5.1",
     "valtio": "^1.10.3"
