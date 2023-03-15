@@ -1,6 +1,10 @@
 // inspired by: https://github.com/pmndrs/valtio
 
 /**
+ * @typedef {Record<string, { $$count: number; $$props?: Listeners }>} Listeners
+ */
+
+/**
  * @callback UnsubscribeFunction
  */
 
@@ -87,7 +91,7 @@ export function staty (target, opts = {}) {
  *
  * @template {object} T
  * @param {T} state
- * @returns {{ count: number, props: Array<{ count: number; prop: string; }> }}
+ * @returns {{ $$count: number, $$props: Listeners }}
  */
 export function listeners (state) {
   if (!state || !state[kStaty] || state[kStaty].isRef) throw new Error('state is not valid')
@@ -96,26 +100,32 @@ export function listeners (state) {
 
   const subscriptions = internal.subscriptions
 
-  const arr = []
+  /** @type {Listeners} */
+  const props = {}
 
   let count = subscriptions.default.size
 
   subscriptions.props.forEach((listeners, prop) => {
-    arr.push({ prop, count: listeners.size })
+    props[prop] = { $$count: listeners.size }
     count += listeners.size
   })
 
-  internal.forEach((val) => {
+  internal.forEach((val, prop) => {
     if (val?.[kStaty] && !val[kStaty].isRef) {
       const res = listeners(val)
-      count += res.count
-      arr.push(...res.props)
+      count += res.$$count
+      if (props[prop]) {
+        props[prop].$$count += res.$$count
+        props[prop].$$props = res.$$props
+      } else {
+        props[prop] = res
+      }
     }
   })
 
   return {
-    count,
-    props: arr
+    $$count: count,
+    $$props: props
   }
 }
 

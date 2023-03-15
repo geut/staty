@@ -358,7 +358,7 @@ test('unsubscribe', () => {
     calls++
   }))
 
-  assert.is(listeners(state).count, 6)
+  assert.is(listeners(state).$$count, 6)
 
   state.prop0 = 1
   state.prop1.prop2 = 1
@@ -366,7 +366,7 @@ test('unsubscribe', () => {
   assert.is(calls, 8)
 
   unsubscribe.forEach(unsubscribe => unsubscribe())
-  assert.is(listeners(state).count, 0)
+  assert.is(listeners(state).$$count, 0)
 })
 
 test('delete key', () => {
@@ -1343,4 +1343,67 @@ test('state validation', () => {
   }
 })
 
+test('listeners', () => {
+  const state = staty({
+    str: 'str',
+    inner: {
+      str: 'str'
+    },
+    map: new Map([['key1', 'val1']]),
+    set: new Set(['val1']),
+    arr: [0, 1, 2]
+  })
+
+  const noop = () => {}
+  subscribe(state, noop)
+  subscribe(state, noop, { props: 'str' })
+  subscribe(state, noop, { props: 'map' })
+  subscribe(state, noop, { props: 'set' })
+  subscribe(state, noop, { props: 'arr' })
+  subscribe(state.inner, noop, { props: 'str' })
+  subscribe(state.map, noop, { props: 'key1' })
+  subscribe(state.set, noop, { props: 'val1' })
+  subscribe(state.arr, noop, { props: 1 })
+
+  assert.equal(listeners(state), {
+    $$count: 9,
+    $$props: {
+      str: {
+        $$count: 1
+      },
+      map: {
+        $$count: 2,
+        $$props: {
+          key1: {
+            $$count: 1
+          }
+        }
+      },
+      set: {
+        $$count: 2,
+        $$props: {
+          val1: {
+            $$count: 1
+          }
+        }
+      },
+      arr: {
+        $$count: 2,
+        $$props: {
+          1: {
+            $$count: 1
+          }
+        }
+      },
+      inner: {
+        $$count: 1,
+        $$props: {
+          str: {
+            $$count: 1
+          }
+        }
+      }
+    }
+  })
+})
 test.run()
