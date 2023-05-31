@@ -22,7 +22,7 @@
     "test": "uvu",
     "posttest": "npm run lint",
     "lint": "eslint src/**/*.js",
-    "prepublishOnly": "npm test && npm run build",
+    "prepublishOnly": "npm test && npm run build && npm run types",
     "coverage": "c8 uvu",
     "make-badge": "coverage-badges",
     "types": "tsc src/index.js --declaration --allowJs --emitDeclarationOnly --outDir types"

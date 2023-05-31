@@ -17,14 +17,11 @@ export function staty<T extends unknown>(target: T, opts?: {
  *
  * @template {object} T
  * @param {T} state
- * @returns {{ count: number, props: Array<{ count: number; prop: string; }> }}
+ * @returns {{ $$count: number, $$props: Listeners }}
  */
 export function listeners<T extends unknown>(state: T): {
-    count: number;
-    props: {
-        count: number;
-        prop: string;
-    }[];
+    $$count: number;
+    $$props: Listeners;
 };
 /**
  * Subscribe for changes in the state
@@ -60,5 +57,9 @@ export function subscribe<T extends unknown>(state: T, handler: () => void, opts
 export function ref<T extends unknown, M extends unknown>(value: T, mapSnapshot?: (ref: T) => M, cache?: boolean): T & RefStaty;
 export { snapshot } from "./snapshot.js";
 export { action } from "./action.js";
+export type Listeners = Record<string, {
+    $$count: number;
+    $$props?: Listeners;
+}>;
 export type UnsubscribeFunction = () => any;
 import { RefStaty } from './types/ref.js';
