@@ -21,7 +21,7 @@
     "build": "esbuild src/index.js --bundle --format=cjs --target=es2022 --outfile=./dist/index.cjs --sourcemap && npm run types",
     "test": "uvu",
     "posttest": "npm run lint",
-    "lint": "standard",
+    "lint": "eslint src/**/*.js",
     "prepublishOnly": "npm test && npm run build",
     "coverage": "c8 uvu",
     "make-badge": "coverage-badges",
