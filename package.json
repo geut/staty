@@ -1,6 +1,6 @@
 {
   "name": "@geut/staty",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Build a proxy-state from plain objects",
   "type": "module",
   "main": "./dist/index.cjs",
